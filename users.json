@@ -1,0 +1,14 @@
+[
+  {
+    "login": "student1",
+    "password": "password1"
+  },
+  {
+    "login": "student2",
+    "password": "password2"
+  },
+  {
+    "login": "test",
+    "password": "2026"
+  }
+]

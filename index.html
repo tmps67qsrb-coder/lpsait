@@ -10,7 +10,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&family=Viaoda+Libre&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css?v=41">
+  <link rel="stylesheet" href="styles.css?v=42">
 </head>
 <body>
 
@@ -1101,6 +1101,36 @@
       <h2 class="section__title reveal">Голосование</h2>
       <p class="section__sub reveal" id="voteSub">Выбери лучшего профорга МГТУ — один человек, один голос</p>
 
+      <!-- Авторизация для голосования (1 аккаунт = 1 голос) -->
+      <div class="vote-auth reveal" id="voteAuth">
+        <div class="vote-auth__form-wrap" id="voteAuthFormWrap">
+          <p class="vote-auth__title">Вход для голосования</p>
+          <p class="vote-auth__sub">Авторизуйтесь по индивидуальному логину и паролю — 1 аккаунт = 1 голос</p>
+          <form class="vote-auth__form" id="voteLoginForm" autocomplete="off">
+            <label class="vote-auth__field">
+              <span>Логин</span>
+              <input type="text" id="voteLoginInput" name="login" placeholder="Введите логин" required autocomplete="username">
+            </label>
+            <label class="vote-auth__field">
+              <span>Пароль</span>
+              <input type="password" id="votePassInput" name="password" placeholder="Введите пароль" required autocomplete="current-password">
+            </label>
+            <p class="vote-auth__error" id="voteAuthError" hidden></p>
+            <button class="btn-frame vote-auth__submit" type="submit" id="voteLoginBtn">
+              <svg class="btn-frame__svg" viewBox="0 0 320 94" preserveAspectRatio="none" aria-hidden="true">
+                <path d="M6 47 C 30 40 44 24 50 8 L 270 8 C 276 24 290 40 314 47 C 290 54 276 70 270 86 L 50 86 C 44 70 30 54 6 47 Z" fill="none" stroke="url(#frameGrad)" stroke-width="1.6" vector-effect="non-scaling-stroke"/>
+              </svg>
+              <span>Войти</span>
+            </button>
+          </form>
+        </div>
+
+        <div class="vote-auth__bar" id="voteUserBar" hidden>
+          <p class="vote-auth__user">Аккаунт: <b id="voteUserName"></b></p>
+          <button class="vote-auth__logout" type="button" id="voteLogoutBtn">Выйти</button>
+        </div>
+      </div>
+
       <!-- экран до открытия голосования -->
       <div class="vote-locked reveal" id="voteLocked">
         <svg class="vote-locked__icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round">
@@ -1115,7 +1145,7 @@
           <div class="countdown__cell"><span id="vd-mins">--</span><small>минут</small></div>
           <div class="countdown__cell"><span id="vd-secs">--</span><small>секунд</small></div>
         </div>
-        <p class="vote-locked__note">Вернись на эту страницу 8 декабря — и отдай свой голос</p>
+        <p class="vote-locked__note">Войдите по логину и паролю выше, чтобы проголосовать</p>
       </div>
 
       <!-- карточки финалистов (заполняет script.js) -->
@@ -1188,6 +1218,6 @@
     </div>
   </footer>
 
-  <script src="script.js?v=41"></script>
+  <script src="script.js?v=42"></script>
 </body>
 </html>

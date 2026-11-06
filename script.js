@@ -121,15 +121,21 @@ const ALLY = [
   });
 })();
 
-// ---------- Секция «Голосование»: открытие 18:00 8 декабря ----------
-// До открытия — таймер, после — карточки участников из Аллеи участников.
-// Голоса со всех устройств сохраняются в общей базе (/api/votes),
-// при этом с каждого устройства можно проголосовать строго 1 раз
-// (проверка по device_id + HttpOnly cookie + аппаратный отпечаток устройства).
+// ---------- Секция «Голосование»: обязательный вход по логину и паролю (1 аккаунт = 1 голос) ----------
+// Проверка логина и пароля выполняется через БД (/api/votes -> users.json / SQLite).
+// Каждый аккаунт может проголосовать строго 1 раз.
 const VOTE_OPEN_AT = new Date("2026-12-08T18:00:00+03:00").getTime();
-const LS_VOTE = "lp26_vote";
+const LS_AUTH = "lp26_auth_user";
+const LS_VOTES_BY_USER = "lp26_votes_by_user";
 const LS_COUNTS = "lp26_counts";
-const LS_DEVICE_ID = "lp26_device_id";
+
+// Локальная заглушка БД на случай открытия сайта без запущенного бэкенда (дублирует users.json)
+const FALLBACK_DB_USERS = [
+  { login: "student1", password: "password1" },
+  { login: "student2", password: "password2" },
+  { login: "test", password: "2026" },
+];
+
 const FINALISTS = ALLY.map((p, i) => ({
   id: "f" + (i + 1),
   name: p.name,
@@ -142,7 +148,14 @@ const voteDemo = new URLSearchParams(location.search).has("demo");
 const voteGrid = document.getElementById("voteGrid");
 const voteLocked = document.getElementById("voteLocked");
 const voteSub = document.getElementById("voteSub");
-const voteIsOpen = () => voteDemo || Date.now() >= VOTE_OPEN_AT;
+const voteAuthFormWrap = document.getElementById("voteAuthFormWrap");
+const voteUserBar = document.getElementById("voteUserBar");
+const voteUserName = document.getElementById("voteUserName");
+const voteLoginForm = document.getElementById("voteLoginForm");
+const voteLoginInput = document.getElementById("voteLoginInput");
+const votePassInput = document.getElementById("votePassInput");
+const voteAuthError = document.getElementById("voteAuthError");
+const voteLogoutBtn = document.getElementById("voteLogoutBtn");
 
 const readJSON = (key, fallback) => {
   try { return JSON.parse(localStorage.getItem(key)) ?? fallback; }
@@ -153,30 +166,46 @@ const writeJSON = (key, val) => {
   catch {}
 };
 
-// Идентификатор голосующего в cookie (lp26_dev)
-function getDeviceId() {
-  let id = null;
-  const match = document.cookie.match(/(?:^|;\s*)lp26_dev=([^;]+)/);
-  if (match) id = decodeURIComponent(match[1]);
-  if (!id) {
-    try { id = localStorage.getItem(LS_DEVICE_ID); } catch {}
-  }
-  if (!id) {
-    id = (crypto.randomUUID ? crypto.randomUUID() : (Date.now().toString(36) + Math.random().toString(36).slice(2)));
-  }
-  try { document.cookie = `lp26_dev=${encodeURIComponent(id)}; path=/; max-age=31536000; SameSite=Lax`; } catch {}
-  try { localStorage.setItem(LS_DEVICE_ID, id); } catch {}
-  return id;
-}
-
-const DEVICE_ID = getDeviceId();
+let currentUser = readJSON(LS_AUTH, null); // { login, password }
 let votingInProgress = false;
 
-const myVote = () => readJSON(LS_VOTE, null);
+const voteIsOpen = () => Boolean(currentUser && currentUser.login) || voteDemo || Date.now() >= VOTE_OPEN_AT;
+
+function getMyVoteForUser(login) {
+  if (!login) return null;
+  const map = readJSON(LS_VOTES_BY_USER, {});
+  return map[login] || null;
+}
+
+function setMyVoteForUser(login, candidateId) {
+  if (!login) return;
+  const map = readJSON(LS_VOTES_BY_USER, {});
+  if (candidateId) {
+    map[login] = { id: candidateId, ts: Date.now() };
+  }
+  writeJSON(LS_VOTES_BY_USER, map);
+}
+
+const myVote = () => (currentUser ? getMyVoteForUser(currentUser.login) : null);
 const localCounts = () => readJSON(LS_COUNTS, {});
 const displayName = (f, i) => [f.name, f.surname].filter(Boolean).join(" ").trim() || "Участник " + (i + 1);
 
+function updateAuthUI() {
+  const loggedIn = Boolean(currentUser && currentUser.login);
+  if (voteAuthFormWrap) voteAuthFormWrap.hidden = loggedIn;
+  if (voteUserBar) voteUserBar.hidden = !loggedIn;
+  if (voteUserName && loggedIn) voteUserName.textContent = currentUser.login;
+  if (voteAuthError) voteAuthError.hidden = true;
+}
+
+function showAuthError(msg) {
+  if (!voteAuthError) return;
+  voteAuthError.textContent = msg;
+  voteAuthError.hidden = !msg;
+}
+
 function renderVoteCards() {
+  const loggedIn = Boolean(currentUser && currentUser.login);
   const my = myVote();
   const counts = localCounts();
   voteGrid.innerHTML = "";
@@ -187,10 +216,15 @@ function renderVoteCards() {
     const groupHtml = f.group ? `<small class="alley-card__group">${f.group}</small>` : "";
     const card = document.createElement("article");
     card.className = "alley-card vote-card" + (chosen ? " is-chosen" : "");
-    // счётчики всех участников открываются после того, как устройство проголосовало
+    // счётчики всех участников открываются после того, как аккаунт проголосовал
     const votesBlock = my
       ? `<p class="vote-card__votes"><b data-votes="${f.id}">${total}</b><small>голосов</small></p>`
       : "";
+    const btnLabel = chosen
+      ? "Ваш голос"
+      : !loggedIn
+      ? "Войти и голосовать"
+      : "Голосовать";
     card.innerHTML = `
       <span class="alley-card__photo vote-card__photo">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 0C13.1 6.9 17.1 10.9 24 12C17.1 13.1 13.1 17.1 12 24C10.9 17.1 6.9 13.1 0 12C6.9 10.9 10.9 6.9 12 0Z"/></svg>
@@ -201,7 +235,7 @@ function renderVoteCards() {
         <svg class="btn-frame__svg" viewBox="0 0 320 94" preserveAspectRatio="none" aria-hidden="true">
           <path d="M6 47 C 30 40 44 24 50 8 L 270 8 C 276 24 290 40 314 47 C 290 54 276 70 270 86 L 50 86 C 44 70 30 54 6 47 Z" fill="none" stroke="url(#frameGrad)" stroke-width="1.6" vector-effect="non-scaling-stroke"/>
         </svg>
-        <span>${chosen ? "Ваш голос" : "Голосовать"}</span>
+        <span>${btnLabel}</span>
       </button>`;
     if (f.photo) {
       const img = new Image();
@@ -228,8 +262,8 @@ function applyServerState(data) {
   if (data.counts && typeof data.counts === "object") {
     writeJSON(LS_COUNTS, data.counts);
   }
-  if (data.my_vote) {
-    writeJSON(LS_VOTE, { id: data.my_vote, ts: Date.now() });
+  if (currentUser && currentUser.login && data.my_vote) {
+    setMyVoteForUser(currentUser.login, data.my_vote);
   }
 
   const nowVote = myVote();
@@ -240,7 +274,6 @@ function applyServerState(data) {
     return;
   }
 
-  // Если голос уже был отдан, просто обновляем цифры голосов в реальном времени
   if (nowId && data.counts) {
     FINALISTS.forEach((f) => {
       const el = voteGrid.querySelector(`[data-votes="${f.id}"]`);
@@ -254,7 +287,10 @@ function applyServerState(data) {
 async function syncVotesFromServer() {
   if (location.protocol === "file:") return;
   try {
-    const qs = new URLSearchParams({ device_id: DEVICE_ID });
+    const qs = new URLSearchParams();
+    if (currentUser && currentUser.login) {
+      qs.set("login", currentUser.login);
+    }
     const res = await fetch(`/api/votes?${qs.toString()}`, {
       method: "GET",
       credentials: "same-origin",
@@ -268,7 +304,83 @@ async function syncVotesFromServer() {
   }
 }
 
+async function verifyCredentialsWithDB(login, password) {
+  if (location.protocol !== "file:") {
+    try {
+      const res = await fetch("/api/votes", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "same-origin",
+        body: JSON.stringify({ action: "login", login, password }),
+      });
+      const data = await res.json().catch(() => null);
+      if (res.status === 401) {
+        return { ok: false, error: (data && data.error) || "Неверный логин или пароль" };
+      }
+      if (res.ok && data && data.ok) {
+        return { ok: true, data };
+      }
+    } catch {
+      // если бэкенд не запущен, проверяем по локальной заглушке БД
+    }
+  }
+  const found = FALLBACK_DB_USERS.some(
+    (u) => u.login === login && u.password === password
+  );
+  if (!found) {
+    return { ok: false, error: "Неверный логин или пароль" };
+  }
+  return { ok: true, data: null };
+}
+
+if (voteLoginForm) {
+  voteLoginForm.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const login = (voteLoginInput.value || "").trim();
+    const password = (votePassInput.value || "").trim();
+    if (!login || !password) {
+      showAuthError("Введите логин и пароль");
+      return;
+    }
+    showAuthError("");
+    const result = await verifyCredentialsWithDB(login, password);
+    if (!result.ok) {
+      showAuthError(result.error || "Неверный логин или пароль");
+      return;
+    }
+    currentUser = { login, password };
+    writeJSON(LS_AUTH, currentUser);
+    votePassInput.value = "";
+    updateAuthUI();
+    if (result.data) {
+      applyServerState(result.data);
+    }
+    voteStateShown = null;
+    refreshVote();
+    renderVoteCards();
+  });
+}
+
+if (voteLogoutBtn) {
+  voteLogoutBtn.addEventListener("click", () => {
+    currentUser = null;
+    try { localStorage.removeItem(LS_AUTH); } catch {}
+    updateAuthUI();
+    voteStateShown = null;
+    refreshVote();
+    renderVoteCards();
+  });
+}
+
 async function voteFor(id) {
+  if (!currentUser || !currentUser.login || !currentUser.password) {
+    showAuthError("Для голосования необходимо войти по логину и паролю");
+    if (voteLoginInput) {
+      voteLoginInput.scrollIntoView({ behavior: "smooth", block: "center" });
+      voteLoginInput.focus();
+    }
+    return;
+  }
   if (myVote() || votingInProgress) return;
   votingInProgress = true;
   voteGrid.querySelectorAll("button").forEach((b) => (b.disabled = true));
@@ -279,8 +391,22 @@ async function voteFor(id) {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "same-origin",
-        body: JSON.stringify({ id, device_id: DEVICE_ID }),
+        body: JSON.stringify({
+          action: "vote",
+          id,
+          login: currentUser.login,
+          password: currentUser.password,
+        }),
       });
+      if (res.status === 401) {
+        currentUser = null;
+        try { localStorage.removeItem(LS_AUTH); } catch {}
+        votingInProgress = false;
+        updateAuthUI();
+        showAuthError("Сессия истекла или неверный пароль — войдите снова");
+        renderVoteCards();
+        return;
+      }
       if (res.ok) {
         const data = await res.json();
         votingInProgress = false;
@@ -295,7 +421,7 @@ async function voteFor(id) {
   const counts = localCounts();
   counts[id] = (counts[id] || 0) + 1;
   writeJSON(LS_COUNTS, counts);
-  writeJSON(LS_VOTE, { id, ts: Date.now() });
+  setMyVoteForUser(currentUser.login, id);
   votingInProgress = false;
   renderVoteCards();
 }
@@ -308,7 +434,7 @@ function refreshVote() {
     voteLocked.hidden = open;
     voteGrid.hidden = !open;
     voteSub.textContent = open
-      ? "Выбери лучшего профорга МГТУ — один человек, один голос"
+      ? "Выбери лучшего профорга МГТУ — один аккаунт, один голос"
       : "Выбор лучшего профорга откроется вместе с финалом конкурса";
     if (open) syncVotesFromServer();
   }
@@ -320,6 +446,7 @@ function refreshVote() {
     document.getElementById("vd-secs").textContent = pad(Math.floor(left / 1000) % 60);
   }
 }
+updateAuthUI();
 renderVoteCards();
 refreshVote();
 syncVotesFromServer();
