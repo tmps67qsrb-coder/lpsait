@@ -124,7 +124,7 @@ const ALLY = [
 // ---------- Секция «Голосование»: обязательный вход по логину и паролю (1 аккаунт = 1 голос) ----------
 // Проверка логина и пароля выполняется через БД (/api/votes -> users.json / SQLite).
 // Каждый аккаунт может проголосовать строго 1 раз.
-const VOTE_OPEN_AT = new Date("2026-12-08T18:00:00+03:00").getTime();
+const VOTE_OPEN_AT = new Date("2026-12-08T16:30:00+03:00").getTime();
 const LS_AUTH = "lp26_auth_user";
 const LS_VOTES_BY_USER = "lp26_votes_by_user";
 const LS_COUNTS = "lp26_counts";
@@ -147,6 +147,7 @@ const FINALISTS = ALLY.map((p, i) => ({
 const voteDemo = new URLSearchParams(location.search).has("demo");
 const voteGrid = document.getElementById("voteGrid");
 const voteLocked = document.getElementById("voteLocked");
+const voteAuth = document.getElementById("voteAuth");
 const voteSub = document.getElementById("voteSub");
 const voteAuthFormWrap = document.getElementById("voteAuthFormWrap");
 const voteUserBar = document.getElementById("voteUserBar");
@@ -169,7 +170,7 @@ const writeJSON = (key, val) => {
 let currentUser = readJSON(LS_AUTH, null); // { login, password }
 let votingInProgress = false;
 
-const voteIsOpen = () => Boolean(currentUser && currentUser.login) || voteDemo || Date.now() >= VOTE_OPEN_AT;
+const voteIsOpen = () => voteDemo || Date.now() >= VOTE_OPEN_AT;
 
 function getMyVoteForUser(login) {
   if (!login) return null;
@@ -432,6 +433,7 @@ function refreshVote() {
   if (open !== voteStateShown) {
     voteStateShown = open;
     voteLocked.hidden = open;
+    if (voteAuth) voteAuth.hidden = !open;
     voteGrid.hidden = !open;
     voteSub.textContent = open
       ? "Выбери лучшего профорга МГТУ — один аккаунт, один голос"
@@ -439,7 +441,7 @@ function refreshVote() {
     if (open) syncVotesFromServer();
   }
   if (!open) {
-    const left = VOTE_OPEN_AT - Date.now();
+    const left = Math.max(0, VOTE_OPEN_AT - Date.now());
     document.getElementById("vd-days").textContent = pad(Math.floor(left / 86400000));
     document.getElementById("vd-hours").textContent = pad(Math.floor(left / 3600000) % 24);
     document.getElementById("vd-mins").textContent = pad(Math.floor(left / 60000) % 60);
@@ -458,12 +460,7 @@ setInterval(() => {
 // ---------- Таймер: отсчёт до ближайшего события конкурса ----------
 // Когда дата наступает, таймер автоматически переключается на следующую.
 const MILESTONES = [
-  { date: "2026-10-10T23:59:59+03:00", label: "До сдачи видео-визиток · 10 октября, 23:59", stage: 1 },
-  { date: "2026-10-13T00:00:00+03:00", label: "До итогов видео-визитки · 13 октября", stage: 1 },
-  { date: "2026-10-17T00:00:00+03:00", label: "До интеллектуального этапа · 17 октября", stage: 2 },
-  { date: "2026-10-24T00:00:00+03:00", label: "До командного этапа · 24 октября", stage: 3 },
-  { date: "2026-11-11T00:00:00+03:00", label: "До этапа «Я-организатор!» · 11 ноября", stage: 4 },
-  { date: "2026-12-08T18:00:00+03:00", label: "До финального гала-концерта · 8 декабря, 18:00", stage: 5 },
+  { date: "2026-12-08T16:30:00+03:00", label: "До финального гала-концерта · 8 декабря, 16:30", stage: 5 },
 ];
 const FINISHED_LABEL = "Конкурс завершён — до встречи в 2027 году!";
 

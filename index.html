@@ -10,7 +10,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&family=Viaoda+Libre&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css?v=42">
+  <link rel="stylesheet" href="styles.css?v=43">
 </head>
 <body>
 
@@ -666,7 +666,7 @@
           <svg class="stage__star stage__star--right" aria-hidden="true"><use href="#chrome-star"/></svg>
           <span class="stage__num">05</span>
           <div class="stage__meta">
-            <span class="stage__date">8 декабря · 18:00 · гала-концерт</span>
+            <span class="stage__date">8 декабря · 16:30 · гала-концерт</span>
             <span class="stage__points">35 б.</span>
           </div>
           <h3><svg class="poster-spark" aria-hidden="true"><use href="#spark"/></svg> Финал <svg class="poster-spark" aria-hidden="true"><use href="#spark"/></svg></h3>
@@ -824,7 +824,7 @@
             <span class="stage-panel__points">35<small>баллов</small></span>
             <div class="stage-panel__title">
               <h3>Финал</h3>
-              <p>8 декабря · 18:00 · гала-концерт в Большом зале ДК МГТУ</p>
+              <p>8 декабря · 16:30 · гала-концерт в Большом зале ДК МГТУ</p>
             </div>
           </div>
           <ul class="stage-panel__list">
@@ -1101,8 +1101,25 @@
       <h2 class="section__title reveal">Голосование</h2>
       <p class="section__sub reveal" id="voteSub">Выбери лучшего профорга МГТУ — один человек, один голос</p>
 
-      <!-- Авторизация для голосования (1 аккаунт = 1 голос) -->
-      <div class="vote-auth reveal" id="voteAuth">
+      <!-- экран до открытия голосования -->
+      <div class="vote-locked reveal" id="voteLocked">
+        <svg class="vote-locked__icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round">
+          <rect x="5" y="10.5" width="14" height="10" rx="2.5"/>
+          <path d="M8 10.5V7.5a4 4 0 0 1 8 0v3"/>
+          <circle cx="12" cy="15.5" r="1.6" fill="currentColor" stroke="none"/>
+        </svg>
+        <p class="vote-locked__text">Голосование откроется <b>8 декабря в 16:30</b> — во время финала</p>
+        <div class="countdown__grid vote-locked__timer">
+          <div class="countdown__cell"><span id="vd-days">--</span><small>дней</small></div>
+          <div class="countdown__cell"><span id="vd-hours">--</span><small>часов</small></div>
+          <div class="countdown__cell"><span id="vd-mins">--</span><small>минут</small></div>
+          <div class="countdown__cell"><span id="vd-secs">--</span><small>секунд</small></div>
+        </div>
+        <p class="vote-locked__note">Вернись на эту страницу 8 декабря — и отдай свой голос</p>
+      </div>
+
+      <!-- Авторизация для голосования (1 аккаунт = 1 голос, открывается 8 декабря в 16:30) -->
+      <div class="vote-auth" id="voteAuth" hidden>
         <div class="vote-auth__form-wrap" id="voteAuthFormWrap">
           <p class="vote-auth__title">Вход для голосования</p>
           <p class="vote-auth__sub">Авторизуйтесь по индивидуальному логину и паролю — 1 аккаунт = 1 голос</p>
@@ -1129,23 +1146,6 @@
           <p class="vote-auth__user">Аккаунт: <b id="voteUserName"></b></p>
           <button class="vote-auth__logout" type="button" id="voteLogoutBtn">Выйти</button>
         </div>
-      </div>
-
-      <!-- экран до открытия голосования -->
-      <div class="vote-locked reveal" id="voteLocked">
-        <svg class="vote-locked__icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round">
-          <rect x="5" y="10.5" width="14" height="10" rx="2.5"/>
-          <path d="M8 10.5V7.5a4 4 0 0 1 8 0v3"/>
-          <circle cx="12" cy="15.5" r="1.6" fill="currentColor" stroke="none"/>
-        </svg>
-        <p class="vote-locked__text">Голосование откроется <b>8 декабря в 18:00</b> — во время финала</p>
-        <div class="countdown__grid vote-locked__timer">
-          <div class="countdown__cell"><span id="vd-days">--</span><small>дней</small></div>
-          <div class="countdown__cell"><span id="vd-hours">--</span><small>часов</small></div>
-          <div class="countdown__cell"><span id="vd-mins">--</span><small>минут</small></div>
-          <div class="countdown__cell"><span id="vd-secs">--</span><small>секунд</small></div>
-        </div>
-        <p class="vote-locked__note">Войдите по логину и паролю выше, чтобы проголосовать</p>
       </div>
 
       <!-- карточки финалистов (заполняет script.js) -->
@@ -1218,6 +1218,6 @@
     </div>
   </footer>
 
-  <script src="script.js?v=42"></script>
+  <script src="script.js?v=43"></script>
 </body>
 </html>
