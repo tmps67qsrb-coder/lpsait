@@ -194,7 +194,11 @@ class ProforgHandler(SimpleHTTPRequestHandler):
 
     def do_GET(self):
         parsed = urllib.parse.urlparse(self.path)
-        clean_path = os.path.normpath(urllib.parse.unquote(parsed.path)).replace("\\", "/")
+        raw_path = urllib.parse.unquote(parsed.path)
+        if ".." in raw_path:
+            self.send_error(403, "Forbidden")
+            return
+        clean_path = os.path.normpath(raw_path).replace("\\", "/")
 
         if clean_path == "/api/votes":
             qs = urllib.parse.parse_qs(parsed.query)
@@ -325,17 +329,33 @@ class ProforgHandler(SimpleHTTPRequestHandler):
 
             with DB_LOCK, sqlite3.connect(DB_PATH) as conn:
                 cur = conn.cursor()
+                existing_vote = find_existing_vote_by_login(cur, authenticated_login)
+                if existing_vote:
+                    counts = get_all_counts(cur)
+                    self._send_json(
+                        409,
+                        {
+                            "ok": False,
+                            "error": "Вы уже голосовали в этом конкурсе",
+                            "my_vote": existing_vote,
+                            "counts": counts,
+                            "total": sum(counts.values()),
+                        },
+                    )
+                    return
+
                 try:
                     cur.execute(
                         """
                         INSERT INTO votes (
                             candidate_id, device_id, cookie_id, fp_ip_hash, ip, user_agent, created_at
-                        ) VALUES (?, ?, ?, '', ?, ?, ?)
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?)
                         """,
                         (
                             candidate_id,
                             f"user:{authenticated_login}",
-                            f"user:{authenticated_login}",
+                            f"cookie:{authenticated_login}",
+                            f"hash:{authenticated_login}",
                             client_ip,
                             self.headers.get("User-Agent", "")[:250],
                             int(time.time()),
@@ -343,10 +363,21 @@ class ProforgHandler(SimpleHTTPRequestHandler):
                     )
                     conn.commit()
                 except sqlite3.IntegrityError:
-                    # Уже проголосовал ранее
-                    pass
+                    existing_vote = find_existing_vote_by_login(cur, authenticated_login)
+                    counts = get_all_counts(cur)
+                    self._send_json(
+                        409,
+                        {
+                            "ok": False,
+                            "error": "Вы уже голосовали в этом конкурсе",
+                            "my_vote": existing_vote,
+                            "counts": counts,
+                            "total": sum(counts.values()),
+                        },
+                    )
+                    return
 
-                my_vote = find_existing_vote_by_login(cur, authenticated_login)
+                my_vote = candidate_id
                 counts = get_all_counts(cur)
                 total = sum(counts.values())
 
