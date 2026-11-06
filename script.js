@@ -153,57 +153,23 @@ const writeJSON = (key, val) => {
   catch {}
 };
 
-// Постоянный идентификатор устройства (хранится в localStorage и дублируется в cookie)
+// Идентификатор голосующего в cookie (lp26_dev)
 function getDeviceId() {
   let id = null;
-  try { id = localStorage.getItem(LS_DEVICE_ID); } catch {}
+  const match = document.cookie.match(/(?:^|;\s*)lp26_dev=([^;]+)/);
+  if (match) id = decodeURIComponent(match[1]);
   if (!id) {
-    const match = document.cookie.match(/(?:^|;\s*)lp26_dev=([^;]+)/);
-    if (match) id = decodeURIComponent(match[1]);
+    try { id = localStorage.getItem(LS_DEVICE_ID); } catch {}
   }
   if (!id) {
     id = (crypto.randomUUID ? crypto.randomUUID() : (Date.now().toString(36) + Math.random().toString(36).slice(2)));
   }
-  try { localStorage.setItem(LS_DEVICE_ID, id); } catch {}
   try { document.cookie = `lp26_dev=${encodeURIComponent(id)}; path=/; max-age=31536000; SameSite=Lax`; } catch {}
+  try { localStorage.setItem(LS_DEVICE_ID, id); } catch {}
   return id;
 }
 
-// Аппаратный отпечаток устройства (экран, плотность пикселей, ядра, память, часовой пояс, GPU)
-function getDeviceFingerprint() {
-  const parts = [
-    screen.width + "x" + screen.height,
-    screen.colorDepth || "",
-    window.devicePixelRatio || 1,
-    navigator.hardwareConcurrency || "",
-    navigator.deviceMemory || "",
-    navigator.platform || "",
-    navigator.language || "",
-    Intl.DateTimeFormat().resolvedOptions().timeZone || "",
-  ];
-  try {
-    const canvas = document.createElement("canvas");
-    const gl = canvas.getContext("webgl") || canvas.getContext("experimental-webgl");
-    if (gl) {
-      const dbg = gl.getExtension("WEBGL_debug_renderer_info");
-      if (dbg) parts.push(gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL) || "");
-    }
-  } catch {}
-  const str = parts.join("|");
-  let h1 = 0xdeadbeef ^ str.length;
-  let h2 = 0x41c6ce57 ^ str.length;
-  for (let i = 0; i < str.length; i++) {
-    const ch = str.charCodeAt(i);
-    h1 = Math.imul(h1 ^ ch, 2654435761);
-    h2 = Math.imul(h2 ^ ch, 1597334677);
-  }
-  h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909);
-  h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909);
-  return (h2 >>> 0).toString(16).padStart(8, "0") + (h1 >>> 0).toString(16).padStart(8, "0");
-}
-
 const DEVICE_ID = getDeviceId();
-const DEVICE_FP = getDeviceFingerprint();
 let votingInProgress = false;
 
 const myVote = () => readJSON(LS_VOTE, null);
@@ -288,7 +254,7 @@ function applyServerState(data) {
 async function syncVotesFromServer() {
   if (location.protocol === "file:") return;
   try {
-    const qs = new URLSearchParams({ device_id: DEVICE_ID, fp: DEVICE_FP });
+    const qs = new URLSearchParams({ device_id: DEVICE_ID });
     const res = await fetch(`/api/votes?${qs.toString()}`, {
       method: "GET",
       credentials: "same-origin",
@@ -313,7 +279,7 @@ async function voteFor(id) {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "same-origin",
-        body: JSON.stringify({ id, device_id: DEVICE_ID, fp: DEVICE_FP }),
+        body: JSON.stringify({ id, device_id: DEVICE_ID }),
       });
       if (res.ok) {
         const data = await res.json();

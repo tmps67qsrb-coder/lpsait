@@ -3,32 +3,38 @@ import { getStore } from "@netlify/blobs";
 
 const VALID_IDS = new Set(["f1", "f2", "f3", "f4", "f5", "f6", "f7", "f8", "f9"]);
 
-export default async (req, context) => {
+function parseCookieVoterId(cookieHeader) {
+  if (!cookieHeader) return "";
+  const mVoter = cookieHeader.match(/(?:^|;\s*)lp26_voter=([^;]+)/);
+  if (mVoter) return decodeURIComponent(mVoter[1]).trim().slice(0, 128);
+  const mDev = cookieHeader.match(/(?:^|;\s*)lp26_dev=([^;]+)/);
+  if (mDev) return decodeURIComponent(mDev[1]).trim().slice(0, 128);
+  return "";
+}
+
+export default async (req) => {
   const store = getStore("proforg-votes-2026");
-  const ip =
-    context.ip ||
-    req.headers.get("x-nf-client-connection-ip") ||
-    (req.headers.get("x-forwarded-for") || "").split(",")[0].trim() ||
-    "";
-  const ua = (req.headers.get("user-agent") || "").slice(0, 256);
   const url = new URL(req.url);
   let deviceId = (url.searchParams.get("device_id") || "").trim().slice(0, 128);
-  let fp = (url.searchParams.get("fp") || "").trim().slice(0, 256);
+  let cookieId = parseCookieVoterId(req.headers.get("cookie") || "");
+  let setCookieHeader = null;
 
   if (req.method === "POST") {
     const body = await req.json().catch(() => ({}));
     const candidateId = String(body.id || "").trim();
     deviceId = String(body.device_id || deviceId).trim().slice(0, 128);
-    fp = String(body.fp || fp).trim().slice(0, 256);
 
     if (!VALID_IDS.has(candidateId)) {
       return Response.json({ error: "Invalid candidate id" }, { status: 400 });
     }
 
-    const fpHash = crypto
-      .createHash("sha256")
-      .update(`${fp}|${ip}|${ua}`)
-      .digest("hex");
+    if (!cookieId) {
+      cookieId = deviceId || crypto.randomUUID();
+      setCookieHeader = `lp26_voter=${encodeURIComponent(cookieId)}; Path=/; Max-Age=31536000; SameSite=Lax; HttpOnly`;
+    }
+    if (!deviceId) {
+      deviceId = cookieId;
+    }
 
     const state = (await store.get("state", { type: "json" })) || {
       counts: { f1: 0, f2: 0, f3: 0, f4: 0, f5: 0, f6: 0, f7: 0, f8: 0, f9: 0 },
@@ -36,35 +42,36 @@ export default async (req, context) => {
     };
 
     const existingVote =
-      (ip && state.voters[`ip:${ip}`]) ||
-      (deviceId && state.voters[`dev:${deviceId}`]) ||
-      (fp && state.voters[`fp:${fpHash}`]);
+      (cookieId && state.voters[`cookie:${cookieId}`]) ||
+      (deviceId && state.voters[`dev:${deviceId}`]);
 
     if (!existingVote) {
       state.counts[candidateId] = (state.counts[candidateId] || 0) + 1;
-      if (ip) state.voters[`ip:${ip}`] = candidateId;
+      if (cookieId) state.voters[`cookie:${cookieId}`] = candidateId;
       if (deviceId) state.voters[`dev:${deviceId}`] = candidateId;
-      if (fp) state.voters[`fp:${fpHash}`] = candidateId;
       await store.setJSON("state", state);
     }
 
     const myVote = existingVote || candidateId;
     const total = Object.values(state.counts).reduce((a, b) => a + b, 0);
-    return Response.json({ counts: state.counts, my_vote: myVote, total });
+    const headers = setCookieHeader ? { "Set-Cookie": setCookieHeader } : {};
+    return Response.json({ counts: state.counts, my_vote: myVote, total }, { headers });
   }
 
-  const fpHash = fp
-    ? crypto.createHash("sha256").update(`${fp}|${ip}|${ua}`).digest("hex")
-    : "";
+  if (!cookieId) {
+    cookieId = deviceId || crypto.randomUUID();
+    setCookieHeader = `lp26_voter=${encodeURIComponent(cookieId)}; Path=/; Max-Age=31536000; SameSite=Lax; HttpOnly`;
+  }
+
   const state = (await store.get("state", { type: "json" })) || {
     counts: { f1: 0, f2: 0, f3: 0, f4: 0, f5: 0, f6: 0, f7: 0, f8: 0, f9: 0 },
     voters: {},
   };
   const myVote =
-    (ip && state.voters[`ip:${ip}`]) ||
+    (cookieId && state.voters[`cookie:${cookieId}`]) ||
     (deviceId && state.voters[`dev:${deviceId}`]) ||
-    (fpHash && state.voters[`fp:${fpHash}`]) ||
     null;
   const total = Object.values(state.counts).reduce((a, b) => a + b, 0);
-  return Response.json({ counts: state.counts, my_vote: myVote, total });
+  const headers = setCookieHeader ? { "Set-Cookie": setCookieHeader } : {};
+  return Response.json({ counts: state.counts, my_vote: myVote, total }, { headers });
 };
