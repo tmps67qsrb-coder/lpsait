@@ -129,13 +129,6 @@ const LS_AUTH = "lp26_auth_user";
 const LS_VOTES_BY_USER = "lp26_votes_by_user";
 const LS_COUNTS = "lp26_counts";
 
-// Локальная заглушка БД на случай открытия сайта без запущенного бэкенда (дублирует users.json)
-const FALLBACK_DB_USERS = [
-  { login: "student1", password: "password1" },
-  { login: "student2", password: "password2" },
-  { login: "test", password: "2026" },
-];
-
 const FINALISTS = ALLY.map((p, i) => ({
   id: "f" + (i + 1),
   name: p.name,
@@ -167,7 +160,11 @@ const writeJSON = (key, val) => {
   catch {}
 };
 
-let currentUser = readJSON(LS_AUTH, null); // { login, password }
+let currentUser = readJSON(LS_AUTH, null); // { login, token }
+if (currentUser && (!currentUser.token || !currentUser.login)) {
+  currentUser = null;
+  try { localStorage.removeItem(LS_AUTH); } catch {}
+}
 let votingInProgress = false;
 
 const voteIsOpen = () => voteDemo || Date.now() >= VOTE_OPEN_AT;
@@ -289,14 +286,22 @@ async function syncVotesFromServer() {
   if (location.protocol === "file:") return;
   try {
     const qs = new URLSearchParams();
-    if (currentUser && currentUser.login) {
+    if (currentUser && currentUser.login && currentUser.token) {
       qs.set("login", currentUser.login);
+      qs.set("token", currentUser.token);
     }
     const res = await fetch(`/api/votes?${qs.toString()}`, {
       method: "GET",
       credentials: "same-origin",
       cache: "no-store",
     });
+    if (res.status === 401) {
+      currentUser = null;
+      try { localStorage.removeItem(LS_AUTH); } catch {}
+      updateAuthUI();
+      renderVoteCards();
+      return;
+    }
     if (!res.ok) return;
     const data = await res.json();
     applyServerState(data);
@@ -306,32 +311,45 @@ async function syncVotesFromServer() {
 }
 
 async function verifyCredentialsWithDB(login, password) {
-  if (location.protocol !== "file:") {
-    try {
-      const res = await fetch("/api/votes", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "same-origin",
-        body: JSON.stringify({ action: "login", login, password }),
-      });
-      const data = await res.json().catch(() => null);
-      if (res.status === 401) {
-        return { ok: false, error: (data && data.error) || "Неверный логин или пароль" };
-      }
-      if (res.ok && data && data.ok) {
-        return { ok: true, data };
-      }
-    } catch {
-      // если бэкенд не запущен, проверяем по локальной заглушке БД
+  if (location.protocol === "file:") {
+    return {
+      ok: false,
+      error: "Для авторизации запустите сайт через сервер (python server.py или Netlify)",
+    };
+  }
+  try {
+    const res = await fetch("/api/votes", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "same-origin",
+      body: JSON.stringify({ action: "login", login, password }),
+    });
+    const data = await res.json().catch(() => null);
+    if (res.status === 429) {
+      return {
+        ok: false,
+        error: (data && data.error) || "Слишком много неудачных попыток входа. Подождите 5 минут.",
+      };
     }
+    if (res.status === 401) {
+      return {
+        ok: false,
+        error: (data && data.error) || "Неверный логин или пароль",
+      };
+    }
+    if (res.ok && data && data.ok) {
+      return { ok: true, data };
+    }
+    return {
+      ok: false,
+      error: (data && data.error) || "Ошибка авторизации",
+    };
+  } catch {
+    return {
+      ok: false,
+      error: "Сервер авторизации временно недоступен",
+    };
   }
-  const found = FALLBACK_DB_USERS.some(
-    (u) => u.login === login && u.password === password
-  );
-  if (!found) {
-    return { ok: false, error: "Неверный логин или пароль" };
-  }
-  return { ok: true, data: null };
 }
 
 if (voteLoginForm) {
@@ -349,7 +367,10 @@ if (voteLoginForm) {
       showAuthError(result.error || "Неверный логин или пароль");
       return;
     }
-    currentUser = { login, password };
+    currentUser = {
+      login: (result.data && result.data.login) || login,
+      token: result.data && result.data.token,
+    };
     writeJSON(LS_AUTH, currentUser);
     votePassInput.value = "";
     updateAuthUI();
@@ -374,7 +395,7 @@ if (voteLogoutBtn) {
 }
 
 async function voteFor(id) {
-  if (!currentUser || !currentUser.login || !currentUser.password) {
+  if (!currentUser || !currentUser.login || !currentUser.token) {
     showAuthError("Для голосования необходимо войти по логину и паролю");
     if (voteLoginInput) {
       voteLoginInput.scrollIntoView({ behavior: "smooth", block: "center" });
@@ -386,43 +407,54 @@ async function voteFor(id) {
   votingInProgress = true;
   voteGrid.querySelectorAll("button").forEach((b) => (b.disabled = true));
 
-  try {
-    if (location.protocol !== "file:") {
-      const res = await fetch("/api/votes", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "same-origin",
-        body: JSON.stringify({
-          action: "vote",
-          id,
-          login: currentUser.login,
-          password: currentUser.password,
-        }),
-      });
-      if (res.status === 401) {
-        currentUser = null;
-        try { localStorage.removeItem(LS_AUTH); } catch {}
-        votingInProgress = false;
-        updateAuthUI();
-        showAuthError("Сессия истекла или неверный пароль — войдите снова");
-        renderVoteCards();
-        return;
-      }
-      if (res.ok) {
-        const data = await res.json();
-        votingInProgress = false;
-        applyServerState(data);
-        return;
-      }
-    }
-  } catch {
-    // резервный локальный учёт, если сайт открыт без сервера
+  if (location.protocol === "file:") {
+    votingInProgress = false;
+    showAuthError("Голосование доступно только при запуске через сервер (python server.py или Netlify)");
+    renderVoteCards();
+    return;
   }
 
-  const counts = localCounts();
-  counts[id] = (counts[id] || 0) + 1;
-  writeJSON(LS_COUNTS, counts);
-  setMyVoteForUser(currentUser.login, id);
+  try {
+    const res = await fetch("/api/votes", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "same-origin",
+      body: JSON.stringify({
+        action: "vote",
+        id,
+        login: currentUser.login,
+        token: currentUser.token,
+      }),
+    });
+    const data = await res.json().catch(() => null);
+
+    if (res.status === 401) {
+      currentUser = null;
+      try { localStorage.removeItem(LS_AUTH); } catch {}
+      votingInProgress = false;
+      updateAuthUI();
+      showAuthError("Сессия истекла — пожалуйста, войдите снова");
+      renderVoteCards();
+      return;
+    }
+    if (res.status === 409) {
+      votingInProgress = false;
+      if (data) applyServerState(data);
+      showAuthError((data && data.error) || "Этот аккаунт уже проголосовал");
+      renderVoteCards();
+      return;
+    }
+    if (res.ok && data && data.ok) {
+      votingInProgress = false;
+      applyServerState(data);
+      renderVoteCards();
+      return;
+    }
+    showAuthError((data && data.error) || "Не удалось сохранить голос. Попробуйте снова.");
+  } catch {
+    showAuthError("Сервер голосования временно недоступен. Проверьте интернет-соединение.");
+  }
+
   votingInProgress = false;
   renderVoteCards();
 }
