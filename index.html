@@ -10,7 +10,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&family=Viaoda+Libre&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css?v=31">
+  <link rel="stylesheet" href="styles.css?v=38">
 </head>
 <body>
 
@@ -52,6 +52,15 @@
         <stop offset=".65" stop-color="#3b82f6" stop-opacity=".28"/>
         <stop offset="1" stop-color="#3b82f6" stop-opacity="0"/>
       </radialGradient>
+      <!-- Убирает белый прямоугольный фон у PNG-логотипа ИБМ и перекрашивает сам логотип в чисто белый -->
+      <filter id="ibmWhiteLogo" color-interpolation-filters="sRGB">
+        <feColorMatrix type="matrix" values="
+          0 0 0 0 1
+          0 0 0 0 1
+          0 0 0 0 1
+          -1.3 -1.3 -1.3 0 3.6
+        "/>
+      </filter>
     </defs>
 
     <!-- 8-лучевая звезда-компас с афиш конкурса -->
@@ -114,8 +123,8 @@
         <a class="nav__link" href="#stages">Этапы</a>
         <a class="nav__link" href="#criteria">Баллы</a>
         <a class="nav__link" href="#org">Оргкомитет</a>
-        <a class="nav__link" href="#faq">Вопросы</a>
         <a class="nav__link" href="#sponsors">Партнёры</a>
+        <a class="nav__link" href="#faq">Вопросы</a>
         <a class="nav__link" href="#vote">Голосование</a>
       </nav>
 
@@ -228,57 +237,34 @@
       </g>
     </svg>
 
-    <!-- Очертания памятников: слева Королёв с орбитами (у УЛК), справа Бауман «Нога» -->
-    <div class="hero__monument hero__monument--left fade-in" aria-hidden="true">
-      <svg viewBox="0 0 220 330" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
-        <ellipse cx="110" cy="138" rx="100" ry="30" transform="rotate(-16 110 138)" opacity=".7"/>
-        <ellipse cx="110" cy="152" rx="86" ry="24" transform="rotate(12 110 152)" opacity=".45"/>
-        <circle cx="196" cy="120" r="3" fill="currentColor" stroke="none"/>
-        <circle cx="30" cy="168" r="2.4" fill="currentColor" stroke="none"/>
-        <circle cx="110" cy="84" r="9"/>
-        <path d="M101 98 Q110 94 119 98"/>
-        <path d="M101 100 C97 112 95 132 94 158 L93 186"/>
-        <path d="M119 100 C123 112 125 132 126 158 L127 186"/>
-        <path d="M90 186 Q110 192 130 186"/>
-        <path d="M101 104 C94 118 91 136 92 152"/>
-        <path d="M119 104 C126 118 129 136 128 152"/>
-        <path d="M102 188 L100 232"/>
-        <path d="M118 188 L120 232"/>
-        <path d="M95 234 H107 M114 234 H126"/>
-        <rect x="86" y="244" width="48" height="8"/>
-        <path d="M92 252 V306 H128 V252"/>
-        <path d="M98 278 H122"/>
-        <path class="twinkle" d="M40 40 L42 46 L48 48 L42 50 L40 56 L38 50 L32 48 L38 46 Z" fill="currentColor" stroke="none"/>
-        <path d="M186 232 L187.5 236 L192 237.5 L187.5 239 L186 243 L184.5 239 L180 237.5 L184.5 236 Z" fill="currentColor" stroke="none"/>
-      </svg>
-    </div>
-    <div class="hero__monument hero__monument--right fade-in" aria-hidden="true">
-      <svg viewBox="0 0 220 330" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
-        <circle cx="112" cy="76" r="9"/>
-        <path d="M108 87 Q112 91 116 87"/>
-        <path d="M103 93 L93 79"/>
-        <path d="M121 93 L131 79"/>
-        <path d="M104 95 Q112 91 120 95"/>
-        <path d="M104 95 C98 114 94 142 92 172 L88 200"/>
-        <path d="M120 95 C126 114 130 142 132 170 L134 198"/>
-        <path d="M88 200 Q111 208 134 198"/>
-        <path d="M119 101 C127 112 123 122 116 129"/>
-        <path d="M105 103 C100 117 98 135 99 152"/>
-        <path d="M118 202 L120 246"/>
-        <path d="M102 202 C92 218 82 232 72 244"/>
-        <path d="M66 246 L82 250"/>
-        <rect x="84" y="256" width="56" height="8"/>
-        <path d="M88 264 V308 H136 V264"/>
-        <path d="M96 284 H128"/>
-        <path class="twinkle" d="M186 40 L188 46 L194 48 L188 50 L186 56 L184 50 L178 48 L184 46 Z" fill="currentColor" stroke="none"/>
-        <path d="M34 220 L35.5 224 L40 225.5 L35.5 227 L34 231 L32.5 227 L28 225.5 L32.5 224 Z" fill="currentColor" stroke="none"/>
-      </svg>
-    </div>
     <!-- Звёздный S-образный шлейф (млечный путь с афиш «Лучший профорг») -->
     <svg class="hero__stardust fade-in" viewBox="0 0 1440 960" preserveAspectRatio="none" aria-hidden="true">
-      <path d="M1320 -40 C1140 210 820 260 430 350 C40 440 -40 650 320 790 C640 915 1020 940 1380 1000" fill="none" stroke="url(#stardustGrad)" stroke-width="28" filter="blur(18px)" opacity=".45"/>
-      <path d="M1320 -40 C1140 210 820 260 430 350 C40 440 -40 650 320 790 C640 915 1020 940 1380 1000" fill="none" stroke="url(#stardustGrad)" stroke-width="2.2" opacity=".9"/>
-      <path d="M1340 -20 C1150 225 830 272 440 364 C50 456 -20 662 335 802 C655 925 1030 950 1390 1010" fill="none" stroke="#8ce0ff" stroke-width="1" stroke-dasharray="2 14" opacity=".75"/>
+      <defs>
+        <linearGradient id="stardustHeroGrad" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0" stop-color="#7fd4ff" stop-opacity="0"/>
+          <stop offset=".2" stop-color="#7fd4ff" stop-opacity=".6"/>
+          <stop offset=".5" stop-color="#dff4ff" stop-opacity=".9"/>
+          <stop offset=".8" stop-color="#4ea8ff" stop-opacity=".6"/>
+          <stop offset="1" stop-color="#3b82f6" stop-opacity="0"/>
+        </linearGradient>
+        <path id="stardustCurve" d="M1320 -40 C1140 210 820 260 430 350 C40 440 -40 650 320 790 C640 915 1020 940 1380 1000"/>
+      </defs>
+      <!-- Многослойное мягкое свечение без резких границ в любом браузере -->
+      <g fill="none" stroke="url(#stardustHeroGrad)" stroke-linecap="round">
+        <use href="#stardustCurve" stroke-width="76" stroke-opacity=".016"/>
+        <use href="#stardustCurve" stroke-width="62" stroke-opacity=".02"/>
+        <use href="#stardustCurve" stroke-width="50" stroke-opacity=".024"/>
+        <use href="#stardustCurve" stroke-width="40" stroke-opacity=".028"/>
+        <use href="#stardustCurve" stroke-width="32" stroke-opacity=".034"/>
+        <use href="#stardustCurve" stroke-width="25" stroke-opacity=".04"/>
+        <use href="#stardustCurve" stroke-width="19" stroke-opacity=".048"/>
+        <use href="#stardustCurve" stroke-width="14" stroke-opacity=".058"/>
+        <use href="#stardustCurve" stroke-width="10" stroke-opacity=".07"/>
+        <use href="#stardustCurve" stroke-width="6.5" stroke-opacity=".09"/>
+        <use href="#stardustCurve" stroke-width="3.8" stroke-opacity=".13"/>
+        <use href="#stardustCurve" stroke-width="1.6" stroke-opacity=".55"/>
+      </g>
+      <path d="M1340 -20 C1150 225 830 272 440 364 C50 456 -20 662 335 802 C655 925 1030 950 1390 1010" fill="none" stroke="#8ce0ff" stroke-width="1" stroke-dasharray="2 14" stroke-linecap="round" opacity=".55"/>
       <g fill="#ffffff">
         <circle cx="1095" cy="146" r="2.5" opacity=".9"/>
         <circle cx="960" cy="212" r="1.8" opacity=".8"/>
@@ -345,12 +331,12 @@
         <span class="hero__year reveal">
           <span class="poster-line" aria-hidden="true"></span>
           <svg class="poster-spark" aria-hidden="true"><use href="#spark"/></svg>
-          <b>2026</b>
+          <b>8.12.2026</b>
           <svg class="poster-spark" aria-hidden="true"><use href="#spark"/></svg>
           <span class="poster-line" aria-hidden="true"></span>
         </span>
 
-        <span class="hero__caption reveal">Главный конкурс профоргов<br>МГТУ им. Н.Э. Баумана</span>
+        <span class="hero__caption reveal">Финал главного конкурса профоргов<br>МГТУ им. Н.Э. Баумана</span>
       </h1>
 
       <div class="hero__alley poster-frame reveal">
@@ -397,33 +383,201 @@
       <p class="section__sub reveal">Путь профорга в конкурсе «Лучший профорг — 2026»</p>
 
       <div class="about-slider reveal">
+        <div class="sky" aria-hidden="true">
+          <div class="sky__track"></div>
+        </div>
+        <!-- Диагональная звёздная россыпь и созвездия внутри скролл-панели (как на афише результатов) -->
+        <svg class="about-slider__stars" viewBox="0 0 980 560" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+          <defs>
+            <linearGradient id="sliderNebula" x1="0" y1="1" x2="1" y2="0">
+              <stop offset="0" stop-color="#1e40af" stop-opacity=".35"/>
+              <stop offset=".45" stop-color="#60a5fa" stop-opacity=".26"/>
+              <stop offset=".75" stop-color="#bae6fd" stop-opacity=".32"/>
+              <stop offset="1" stop-color="#1e3a8a" stop-opacity=".15"/>
+            </linearGradient>
+          </defs>
+          <path d="M-60 460 C180 340 420 120 680 -20 L920 -20 C680 180 420 420 120 580 Z" fill="url(#sliderNebula)"/>
+          <path d="M220 580 C460 390 690 210 1020 90 L1020 260 C760 360 520 490 360 580 Z" fill="url(#sliderNebula)" opacity=".65"/>
+          <g fill="#ffffff" opacity=".85">
+            <circle cx="84" cy="96" r="1.4"/><circle cx="142" cy="64" r="1.1"/><circle cx="218" cy="88" r="1.6"/>
+            <circle cx="312" cy="48" r="1.2"/><circle cx="520" cy="42" r="1.8"/><circle cx="590" cy="68" r="1.2"/>
+            <circle cx="645" cy="34" r="1.5"/><circle cx="712" cy="56" r="2"/><circle cx="786" cy="82" r="1.3"/>
+            <circle cx="864" cy="46" r="1.6"/><circle cx="918" cy="92" r="1.4"/><circle cx="42" cy="210" r="1.5"/>
+            <circle cx="34" cy="340" r="1.8"/><circle cx="48" cy="445" r="1.3"/><circle cx="942" cy="225" r="1.6"/>
+            <circle cx="934" cy="380" r="1.4"/><circle cx="948" cy="472" r="1.8"/><circle cx="430" cy="528" r="1.4"/>
+            <circle cx="585" cy="536" r="1.6"/><circle cx="745" cy="522" r="1.3"/>
+          </g>
+          <use href="#lens-flare" x="620" y="6" width="34" height="34" opacity=".75"/>
+          <use href="#lens-flare" x="44" y="138" width="28" height="28" opacity=".65"/>
+          <use href="#lens-flare" x="906" y="128" width="30" height="30" opacity=".7"/>
+          <use href="#lens-flare" x="128" y="498" width="26" height="26" opacity=".6"/>
+          <use href="#lens-flare" x="842" y="494" width="28" height="28" opacity=".65"/>
+        </svg>
+
+        <span class="about-slider__bracket" aria-hidden="true"></span>
+        <span class="about-slider__side about-slider__side--left" aria-hidden="true">ЛУЧШИЙ ПРОФОРГ</span>
+        <span class="about-slider__side about-slider__side--right" aria-hidden="true">ЛУЧШИЙ ПРОФОРГ</span>
+
         <div class="about-slider__viewport">
           <div class="about-slider__track" id="aboutTrack">
+            <!-- Слайд 1: О конкурсе (в едином дизайне с таблицей результатов) -->
             <div class="about-slide">
-              <p><b>«Лучший профорг»</b> — не просто конкурс, а пространство, где профорги раскрывают
-              свои лидерские и организационные таланты. Конкурс проводится ежегодно Профсоюзом
-              студентов МГТУ им. Н.Э. Баумана, поддерживает профоргов групп и определяет лучшего
-              из лучших — того, чья работа больше всех вносит вклад в сплочение коллектива.</p>
+              <div class="poster-sheet">
+                <div class="poster-sheet__head">
+                  <div class="poster-sheet__logos" aria-hidden="true">
+                    <img class="poster-sheet__logo-bmstu" src="img/bmstu-logo.png" alt="">
+                    <img class="poster-sheet__logo-prof" src="img/profsoyuz-logo.svg" alt="">
+                    <img class="poster-sheet__logo-ibm" src="img/ibm-logo.png" alt="">
+                  </div>
+                  <div class="poster-sheet__title">
+                    <strong>О КОНКУРСЕ</strong>
+                    <span>2026</span>
+                  </div>
+                </div>
+                <div class="poster-sheet__board poster-sheet__board--text">
+                  <span class="poster-sheet__ray-h" aria-hidden="true">
+                    <svg class="poster-sheet__ray-star"><use href="#lens-flare"/></svg>
+                  </span>
+                  <span class="poster-sheet__ray-v" aria-hidden="true">
+                    <svg class="poster-sheet__ray-star"><use href="#lens-flare"/></svg>
+                  </span>
+                  <svg class="poster-sheet__bg-star poster-sheet__bg-star--1" aria-hidden="true"><use href="#lens-flare"/></svg>
+                  <svg class="poster-sheet__bg-star poster-sheet__bg-star--2" aria-hidden="true"><use href="#lens-flare"/></svg>
+                  <p><b>«Лучший профорг»</b> — не просто конкурс, а пространство, где профорги раскрывают
+                  свои лидерские и организационные таланты. Конкурс проводится ежегодно Профсоюзом
+                  студентов МГТУ им. Н.Э. Баумана, поддерживает профоргов групп и определяет лучшего
+                  из лучших — того, чья работа больше всех вносит вклад в сплочение коллектива.</p>
+                </div>
+              </div>
             </div>
+
+            <!-- Слайд 2: Результаты 3 этапа (в дизайне загруженной афиши) -->
             <div class="about-slide">
-              <h3>Кто может участвовать</h3>
-              <ul>
-                <li>профорги групп 1–6 курсов специалитета;</li>
-                <li>профорги групп 1–4 курсов бакалавриата;</li>
-                <li>профорги групп 1–2 курсов магистратуры;</li>
-                <li>профорги курсов;</li>
-                <li>волонтёры;</li>
-                <li>активные члены комиссий, клубов и организаций, выполняющие функции, аналогичные профоргам.</li>
-              </ul>
-            </div>
-            <div class="about-slide">
-              <h3>Кто не может участвовать</h3>
-              <ul>
-                <li>председатели комиссий и клубов Профсоюза;</li>
-                <li>руководители иных студенческих организаций;</li>
-                <li>председатели первичных профсоюзных организаций;</li>
-                <li>студенты, не являющиеся членами Профсоюза.</li>
-              </ul>
+              <div class="poster-sheet">
+                <div class="poster-sheet__head">
+                  <div class="poster-sheet__logos" aria-hidden="true">
+                    <img class="poster-sheet__logo-bmstu" src="img/bmstu-logo.png" alt="">
+                    <img class="poster-sheet__logo-prof" src="img/profsoyuz-logo.svg" alt="">
+                    <img class="poster-sheet__logo-ibm" src="img/ibm-logo.png" alt="">
+                  </div>
+                  <div class="poster-sheet__title">
+                    <strong>РЕЗУЛЬТАТЫ</strong>
+                    <span>3 этапа</span>
+                  </div>
+                </div>
+                <div class="poster-sheet__board">
+                  <span class="poster-sheet__ray-h" aria-hidden="true">
+                    <svg class="poster-sheet__ray-star"><use href="#lens-flare"/></svg>
+                  </span>
+                  <span class="poster-sheet__ray-v" aria-hidden="true">
+                    <svg class="poster-sheet__ray-star"><use href="#lens-flare"/></svg>
+                  </span>
+                  <div class="results-table-wrap">
+                    <table class="results-table" aria-label="Результаты 3 этапа конкурса Лучший профорг">
+                      <thead>
+                        <tr>
+                          <th class="results-table__num" aria-label="Место"></th>
+                          <th class="results-table__name" aria-label="Участник"></th>
+                          <th class="results-table__group" aria-label="Группа"></th>
+                          <th><b>1</b>этап</th>
+                          <th><b>2</b>этап</th>
+                          <th><b>3</b>этап</th>
+                          <th class="results-table__sum">Сумма</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <tr class="is-top">
+                          <td class="results-table__num">1</td>
+                          <td class="results-table__name">
+                            <span>Гузько Никита Андреевич</span>
+                            <svg class="results-table__spark results-table__spark--1" aria-hidden="true"><use href="#lens-flare"/></svg>
+                          </td>
+                          <td class="results-table__group">ФН11-32Б</td>
+                          <td>13,2</td>
+                          <td>9,6</td>
+                          <td>9,5</td>
+                          <td class="results-table__sum">32,3</td>
+                        </tr>
+                        <tr class="is-top">
+                          <td class="results-table__num">2</td>
+                          <td class="results-table__name">
+                            <span>Аксенова Алевтина Александровна</span>
+                            <svg class="results-table__spark results-table__spark--2" aria-hidden="true"><use href="#lens-flare"/></svg>
+                          </td>
+                          <td class="results-table__group">ИБМ6-11М</td>
+                          <td>11,8</td>
+                          <td>9,6</td>
+                          <td>7,5</td>
+                          <td class="results-table__sum">28,9</td>
+                        </tr>
+                        <tr class="is-top">
+                          <td class="results-table__num">3</td>
+                          <td class="results-table__name"><span>Загирова Алина Тимуровна</span></td>
+                          <td class="results-table__group">РК5-51Б</td>
+                          <td>10,9</td>
+                          <td>8,5</td>
+                          <td>8,6</td>
+                          <td class="results-table__sum">28</td>
+                        </tr>
+                        <tr>
+                          <td class="results-table__num">4</td>
+                          <td class="results-table__name"><span>Щетанова Полина Денисовна</span></td>
+                          <td class="results-table__group">Э4-72Б</td>
+                          <td>9,9</td>
+                          <td>7,9</td>
+                          <td>10</td>
+                          <td class="results-table__sum">27,8</td>
+                        </tr>
+                        <tr>
+                          <td class="results-table__num">5</td>
+                          <td class="results-table__name"><span>Амиров Руслан Рустемович</span></td>
+                          <td class="results-table__group">РЛ6-31М</td>
+                          <td>11,1</td>
+                          <td>9,1</td>
+                          <td>5,8</td>
+                          <td class="results-table__sum">26</td>
+                        </tr>
+                        <tr>
+                          <td class="results-table__num">6</td>
+                          <td class="results-table__name"><span>Кузьмичев Максим Олегович</span></td>
+                          <td class="results-table__group">РКТ2-51</td>
+                          <td>9,6</td>
+                          <td>8,7</td>
+                          <td>7,5</td>
+                          <td class="results-table__sum">25,8</td>
+                        </tr>
+                        <tr>
+                          <td class="results-table__num">7</td>
+                          <td class="results-table__name"><span>Шумилина Екатерина Владимировна</span></td>
+                          <td class="results-table__group">МТ11-52Б</td>
+                          <td>8,3</td>
+                          <td>8,4</td>
+                          <td>8,2</td>
+                          <td class="results-table__sum">24,9</td>
+                        </tr>
+                        <tr>
+                          <td class="results-table__num">8</td>
+                          <td class="results-table__name"><span>Портузенков Ильяс Рафаэлевич</span></td>
+                          <td class="results-table__group">ИУ10-59</td>
+                          <td>7,2</td>
+                          <td>10</td>
+                          <td>6</td>
+                          <td class="results-table__sum">23,2</td>
+                        </tr>
+                        <tr>
+                          <td class="results-table__num">9</td>
+                          <td class="results-table__name"><span>Данилина Дарья Алексеевна</span></td>
+                          <td class="results-table__group">ИУ1К-31Б</td>
+                          <td>7,1</td>
+                          <td>7,2</td>
+                          <td>6,9</td>
+                          <td class="results-table__sum">21,2</td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -431,29 +585,11 @@
           <button class="slider-btn" id="aboutPrev" aria-label="Предыдущий слайд">
             <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M15 5l-7 7 7 7"/></svg>
           </button>
-          <p class="slider-count"><b id="aboutCurrent">01</b> / 03</p>
+          <p class="slider-count"><b id="aboutCurrent">01</b> / 02</p>
           <button class="slider-btn" id="aboutNext" aria-label="Следующий слайд">
             <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M9 5l7 7-7 7"/></svg>
           </button>
         </div>
-      </div>
-
-      <div class="about__cards">
-        <article class="card reveal reveal--left">
-          <svg class="card__spark" aria-hidden="true"><use href="#spark"/></svg>
-          <h3>Определяем лучшего</h3>
-          <p>Звание «Лучший профорг — 2026» разыгрывается в честной борьбе: 85 баллов за пять этапов, оценки жюри и зрителей.</p>
-        </article>
-        <article class="card reveal">
-          <svg class="card__spark" aria-hidden="true"><use href="#spark"/></svg>
-          <h3>Поддерживаем профоргов</h3>
-          <p>Общественное признание работы профоргов, повышение статуса профорга группы и распространение успешного опыта на другие учебные группы.</p>
-        </article>
-        <article class="card reveal reveal--right">
-          <svg class="card__spark" aria-hidden="true"><use href="#spark"/></svg>
-          <h3>Развиваем актив</h3>
-          <p>Прокачиваем компетенции: лидерство, проектное управление, публичные выступления, PR и SMM, организация мероприятий.</p>
-        </article>
       </div>
 
       <div class="about-jury reveal">
@@ -838,6 +974,55 @@
           </div>
   </section>
 
+  <!-- ======= СПОНСОРЫ ======= -->
+  <section class="section section--soft" id="sponsors">
+    <div class="glow glow--top fade-in" aria-hidden="true"></div>
+    <div class="sky fade-in" aria-hidden="true">
+      <div class="sky__track"></div>
+    </div>
+    <div class="container">
+      <h2 class="section__title reveal">Партнёры конкурса</h2>
+      <p class="section__sub reveal">Компании, поддерживающие «Лучший профорг — 2026»</p>
+
+      <div class="sponsors reveal">
+        <a class="sponsors__plate" href="https://www.kaspersky.ru/" target="_blank" rel="noopener" aria-label="Лаборатория Касперского" title="Лаборатория Касперского">
+          <img src="img/sponsor-kaspersky.svg" alt="Лаборатория Касперского">
+        </a>
+        <a class="sponsors__plate" href="https://beget.com/" target="_blank" rel="noopener" aria-label="Хостинг-провайдер Beget" title="Хостинг-провайдер Beget">
+          <img src="img/sponsor-beget.svg" alt="Beget">
+        </a>
+        <a class="sponsors__plate" href="https://www.cafemumu.ru/" target="_blank" rel="noopener" aria-label="Сеть кафе «Му-Му»" title="Сеть кафе «Му-Му»">
+          <img src="img/sponsor-mumu.svg" alt="Му-Му">
+        </a>
+        <a class="sponsors__plate" href="https://stepik.org/" target="_blank" rel="noopener" aria-label="Образовательная платформа Stepik" title="Образовательная платформа Stepik">
+          <img src="img/sponsor-stepik.png" alt="Stepik">
+        </a>
+        <a class="sponsors__plate" href="https://ramen.moscow/" target="_blank" rel="noopener" aria-label="Сеть ресторанов RA'MEN" title="Сеть ресторанов RA'MEN">
+          <img src="img/sponsor-ramen.png" alt="RA'MEN">
+        </a>
+        <a class="sponsors__plate" href="https://drive-msk.ru/" target="_blank" rel="noopener" aria-label="Автошкола «Драйв»" title="Автошкола «Драйв»">
+          <img src="img/sponsor-drive.png" alt="Автошкола Драйв">
+        </a>
+        <a class="sponsors__plate" href="https://koto.cafe/" target="_blank" rel="noopener" aria-label="Котокафе «Котиссимо»" title="Котокафе «Котиссимо»">
+          <img src="img/sponsor-koto.svg" alt="Котокафе Котиссимо">
+        </a>
+        <a class="sponsors__plate" href="https://copykom.ru/" target="_blank" rel="noopener" aria-label="Типография «Копиком»" title="Типография «Копиком»">
+          <img src="img/sponsor-copykom.svg" alt="Копиком">
+        </a>
+        <a class="sponsors__plate" href="https://authenticlovers.ru/" target="_blank" rel="noopener" aria-label="Лаунж-бар Authentic lovers" title="Лаунж-бар Authentic lovers">
+          <img src="img/sponsor-authentic.png" alt="Authentic lovers">
+        </a>
+        <a class="sponsors__plate" href="https://neylashes.ru/" target="_blank" rel="noopener" aria-label="Студия красоты NEYLASHES" title="Студия красоты NEYLASHES">
+          <img src="img/sponsor-neylashes.svg" alt="NEYLASHES">
+        </a>
+        <a class="sponsors__plate" href="https://mafiavipmsk.ru/" target="_blank" rel="noopener" aria-label="Клуб «Мафия с падающими стульями» Mafia VIP" title="Клуб «Мафия с падающими стульями» Mafia VIP">
+          <img src="img/sponsor-mafiavip.png" alt="Mafia VIP">
+        </a>
+      </div>
+
+    </div>
+  </section>
+
   <!-- ======= FAQ ======= -->
   <section class="section" id="faq">
     <div class="glow glow--top fade-in" aria-hidden="true"></div>
@@ -907,55 +1092,6 @@
     </div>
   </section>
 
-  <!-- ======= СПОНСОРЫ ======= -->
-  <section class="section section--soft" id="sponsors">
-    <div class="glow glow--top fade-in" aria-hidden="true"></div>
-    <div class="sky fade-in" aria-hidden="true">
-      <div class="sky__track"></div>
-    </div>
-    <div class="container">
-      <h2 class="section__title reveal">Партнёры конкурса</h2>
-      <p class="section__sub reveal">Компании, поддерживающие «Лучший профорг — 2026»</p>
-
-      <div class="sponsors reveal">
-        <a class="sponsors__plate" href="https://www.kaspersky.ru/" target="_blank" rel="noopener" aria-label="Лаборатория Касперского" title="Лаборатория Касперского">
-          <img src="img/sponsor-kaspersky.svg" alt="Лаборатория Касперского">
-        </a>
-        <a class="sponsors__plate" href="https://beget.com/" target="_blank" rel="noopener" aria-label="Хостинг-провайдер Beget" title="Хостинг-провайдер Beget">
-          <img src="img/sponsor-beget.svg" alt="Beget">
-        </a>
-        <a class="sponsors__plate" href="https://www.cafemumu.ru/" target="_blank" rel="noopener" aria-label="Сеть кафе «Му-Му»" title="Сеть кафе «Му-Му»">
-          <img src="img/sponsor-mumu.svg" alt="Му-Му">
-        </a>
-        <a class="sponsors__plate" href="https://stepik.org/" target="_blank" rel="noopener" aria-label="Образовательная платформа Stepik" title="Образовательная платформа Stepik">
-          <img src="img/sponsor-stepik.png" alt="Stepik">
-        </a>
-        <a class="sponsors__plate" href="https://ramen.moscow/" target="_blank" rel="noopener" aria-label="Сеть ресторанов RA'MEN" title="Сеть ресторанов RA'MEN">
-          <img src="img/sponsor-ramen.png" alt="RA'MEN">
-        </a>
-        <a class="sponsors__plate" href="https://drive-msk.ru/" target="_blank" rel="noopener" aria-label="Автошкола «Драйв»" title="Автошкола «Драйв»">
-          <img src="img/sponsor-drive.png" alt="Автошкола Драйв">
-        </a>
-        <a class="sponsors__plate" href="https://koto.cafe/" target="_blank" rel="noopener" aria-label="Котокафе «Котиссимо»" title="Котокафе «Котиссимо»">
-          <img src="img/sponsor-koto.svg" alt="Котокафе Котиссимо">
-        </a>
-        <a class="sponsors__plate" href="https://copykom.ru/" target="_blank" rel="noopener" aria-label="Типография «Копиком»" title="Типография «Копиком»">
-          <img src="img/sponsor-copykom.svg" alt="Копиком">
-        </a>
-        <a class="sponsors__plate" href="https://authenticlovers.ru/" target="_blank" rel="noopener" aria-label="Лаунж-бар Authentic lovers" title="Лаунж-бар Authentic lovers">
-          <img src="img/sponsor-authentic.png" alt="Authentic lovers">
-        </a>
-        <a class="sponsors__plate" href="https://neylashes.ru/" target="_blank" rel="noopener" aria-label="Студия красоты NEYLASHES" title="Студия красоты NEYLASHES">
-          <img src="img/sponsor-neylashes.svg" alt="NEYLASHES">
-        </a>
-        <a class="sponsors__plate" href="https://mafiavipmsk.ru/" target="_blank" rel="noopener" aria-label="Клуб «Мафия с падающими стульями» Mafia VIP" title="Клуб «Мафия с падающими стульями» Mafia VIP">
-          <img src="img/sponsor-mafiavip.png" alt="Mafia VIP">
-        </a>
-      </div>
-
-    </div>
-  </section>
-
   <!-- ======= ГОЛОСОВАНИЕ ======= -->
   <section class="section section--soft" id="vote">
     <div class="glow glow--top fade-in" aria-hidden="true"></div>
@@ -988,55 +1124,6 @@
     </div>
   </section>
 
-  <!-- ======= УЧАСТИЕ ======= -->
-  <section class="section apply" id="apply">
-    <div class="glow glow--center fade-in" aria-hidden="true"></div>
-    <div class="sky fade-in" aria-hidden="true">
-      <div class="sky__track"></div>
-    </div>
-    <div class="deco deco--apply fade-in" aria-hidden="true">
-      <svg viewBox="0 0 420 320" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
-        <path d="M16 306 C96 232 190 148 296 70" stroke-dasharray="2 12" opacity=".8"/>
-        <g transform="translate(312 62) rotate(46) scale(.72)">
-          <path d="M0 -96 C20 -70 27 -42 27 -4 L27 50 H-27 L-27 -4 C-27 -42 -20 -70 0 -96 Z"/>
-          <circle cx="0" cy="-20" r="13"/>
-          <path d="M-27 22 L-52 58 L-27 55 M27 22 L52 58 L27 55"/>
-          <path d="M-15 50 V70 M0 50 V78 M15 50 V70" opacity=".8"/>
-        </g>
-        <g fill="currentColor" stroke="none">
-          <path class="twinkle" d="M330 22 L333 30 L341 33 L333 36 L330 44 L327 36 L319 33 L327 30 Z"/>
-          <path d="M120 60 L121.8 65 L127 66.8 L121.8 68.6 L120 73.8 L118.2 68.6 L113 66.8 L118.2 65 Z"/>
-          <path d="M210 180 L211.5 184.5 L216 186 L211.5 187.5 L210 192 L208.5 187.5 L204 186 L208.5 184.5 Z"/>
-          <circle cx="60" cy="120" r="2.4"/>
-          <circle cx="360" cy="150" r="2.4"/>
-          <circle cx="250" cy="260" r="2.4"/>
-        </g>
-      </svg>
-    </div>
-    <div class="container container--narrow">
-      <h2 class="section__title reveal">Как стать участником</h2>
-
-      <div class="cta reveal">
-        <h3>Регистрация — в официальной группе конкурса</h3>
-        <p>
-          Заявки принимаются в группе «Лучший профорг» ВКонтакте с 8 по 18 сентября:
-          ФИО, факультет и учебная группа, контакты, согласие на обработку персональных
-          данных. Там же публикуются новости этапов, результаты и разборы работ.
-        </p>
-        <div class="cta__actions">
-          <a class="btn-frame" href="https://vk.com/thebestprof" target="_blank" rel="noopener">
-            <svg class="btn-frame__svg" viewBox="0 0 320 94" preserveAspectRatio="none" aria-hidden="true">
-              <path d="M6 47 C 30 40 44 24 50 8 L 270 8 C 276 24 290 40 314 47 C 290 54 276 70 270 86 L 50 86 C 44 70 30 54 6 47 Z" fill="none" stroke="url(#frameGrad)" stroke-width="1.6" vector-effect="non-scaling-stroke"/>
-            </svg>
-            <span>Группа конкурса ВКонтакте</span>
-          </a>
-          <a class="btn-ghost" href="https://t.me/profkom_bmstu" target="_blank" rel="noopener">Telegram Профсоюза</a>
-        </div>
-        <p class="cta__note">Вопросы — в личные сообщения группы конкурса.</p>
-      </div>
-    </div>
-  </section>
-
   <!-- ======= ПОДВАЛ ======= -->
   <footer class="footer">
     <div class="footer__glow fade-in" aria-hidden="true"></div>
@@ -1061,8 +1148,8 @@
         <a href="#stages">Этапы</a>
         <a href="#criteria">Баллы</a>
         <a href="#org">Оргкомитет</a>
-        <a href="#faq">Вопросы</a>
         <a href="#sponsors">Партнёры</a>
+        <a href="#faq">Вопросы</a>
       </nav>
 
       <div class="footer__socials reveal">
@@ -1091,13 +1178,14 @@
 
       <p class="footer__note reveal">
         Ежегодный конкурс среди профоргов учебных групп. Учредитель — Профсоюз студентов МГТУ им. Н.Э. Баумана.<br>
-        Финал — Большой зал Дворца культуры МГТУ, ул. 2-я Бауманская, 5.
+        Главный организатор — Профбюро факультета «Инженерный бизнес и менеджмент».<br>
+        Финал — Большой зал Дворца культуры МГТУ, Рубцовская набережная, 2/18.
       </p>
     </div>
 
     <div class="footer__bottom">
       <a href="polozhenie-2026.pdf" target="_blank" rel="noopener">Положение о конкурсе (PDF)</a>
-      <p>2026 © Профсоюз студентов МГТУ им. Н.Э. Баумана</p>
+      <p>2026 © Лучший профорг МГТУ им. Н.Э. Баумана</p>
     </div>
   </footer>
 
