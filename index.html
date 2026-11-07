@@ -10,7 +10,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&family=Viaoda+Libre&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css?v=43">
+  <link rel="stylesheet" href="styles.css?v=45">
 </head>
 <body>
 
@@ -128,11 +128,6 @@
         <a class="nav__link" href="#vote">Голосование</a>
       </nav>
 
-      <a class="logo" href="#hero" aria-label="Лучший профорг — 2026">
-        <span class="logo__icon"><img src="img/logo-lp2026.png" alt="Эмблема «ЛП — 2026»"></span>
-        <span class="logo__text">Лучший профорг</span>
-      </a>
-
       <div class="header__socials">
         <a href="https://vk.com/thebestprof" target="_blank" rel="noopener" aria-label="Группа конкурса ВКонтакте" title="Группа конкурса">
           <svg viewBox="0 0.6 24 24" width="22" height="22" fill="currentColor"><path d="M12.78 17.62c-5.52 0-8.67-3.78-8.8-10.07h2.76c.09 4.62 2.13 6.58 3.74 6.98V7.55h2.6v3.99c1.6-.17 3.27-1.99 3.83-3.99h2.6c-.43 2.46-2.25 4.28-3.54 5.03 1.29.6 3.36 2.18 4.14 5.04h-2.86c-.61-1.9-2.14-3.38-4.17-3.58v3.58h-.3z"/></svg>
@@ -141,6 +136,11 @@
           <svg viewBox="0 -0.6 24 24" width="22" height="22" fill="currentColor"><path d="M21.9 4.6 18.9 19c-.23 1-.83 1.25-1.68.78l-4.65-3.43-2.24 2.16c-.25.25-.46.46-.94.46l.33-4.73L18.4 6.5c.37-.33-.08-.52-.58-.19L7.26 13.4l-4.58-1.43c-1-.31-1.02-1 .21-1.48L20.6 3.1c.83-.3 1.55.2 1.3 1.5z"/></svg>
         </a>
       </div>
+
+      <button class="logo cabinet-header-btn" id="openCabinetHeaderBtn" type="button" aria-label="Личный кабинет">
+        <span class="logo__icon"><img src="img/logo-lp2026.png" alt="Эмблема «ЛП — 2026»"></span>
+        <span class="logo__text" id="headerCabinetLabel">Личный кабинет</span>
+      </button>
 
       <button class="burger" id="burger" aria-label="Открыть меню" aria-expanded="false">
         <span></span><span></span><span></span>
@@ -1118,37 +1118,36 @@
         <p class="vote-locked__note">Вернись на эту страницу 8 декабря — и отдай свой голос</p>
       </div>
 
-      <!-- Авторизация для голосования (1 аккаунт = 1 голос, открывается 8 декабря в 16:30) -->
+      <!-- Авторизация для голосования (обязательная регистрация, 1 аккаунт = 1 голос) -->
       <div class="vote-auth" id="voteAuth" hidden>
         <div class="vote-auth__form-wrap" id="voteAuthFormWrap">
-          <p class="vote-auth__title">Вход для голосования</p>
-          <p class="vote-auth__sub">Авторизуйтесь по индивидуальному логину и паролю — 1 аккаунт = 1 голос</p>
-          <form class="vote-auth__form" id="voteLoginForm" autocomplete="off">
-            <label class="vote-auth__field">
-              <span>Логин</span>
-              <input type="text" id="voteLoginInput" name="login" placeholder="Введите логин" required autocomplete="username">
-            </label>
-            <label class="vote-auth__field">
-              <span>Пароль</span>
-              <input type="password" id="votePassInput" name="password" placeholder="Введите пароль" required autocomplete="current-password">
-            </label>
-            <p class="vote-auth__error" id="voteAuthError" hidden></p>
-            <button class="btn-frame vote-auth__submit" type="submit" id="voteLoginBtn">
+          <p class="vote-auth__title">Личный кабинет участника голосования</p>
+          <p class="vote-auth__sub">Для доступа к голосованию необходима обязательная регистрация. 1 аккаунт (номер телефона) = 1 голос.</p>
+          <div class="vote-auth__actions">
+            <button class="btn-frame vote-auth__submit" type="button" id="voteOpenRegBtn">
               <svg class="btn-frame__svg" viewBox="0 0 320 94" preserveAspectRatio="none" aria-hidden="true">
                 <path d="M6 47 C 30 40 44 24 50 8 L 270 8 C 276 24 290 40 314 47 C 290 54 276 70 270 86 L 50 86 C 44 70 30 54 6 47 Z" fill="none" stroke="url(#frameGrad)" stroke-width="1.6" vector-effect="non-scaling-stroke"/>
               </svg>
-              <span>Войти</span>
+              <span>Регистрация</span>
             </button>
-          </form>
+            <button class="btn-ghost vote-auth__login-switch" type="button" id="voteOpenLoginBtn">Уже есть аккаунт — Войти</button>
+          </div>
+          <p class="vote-auth__error" id="voteAuthError" hidden></p>
         </div>
 
         <div class="vote-auth__bar" id="voteUserBar" hidden>
-          <p class="vote-auth__user">Аккаунт: <b id="voteUserName"></b></p>
-          <button class="vote-auth__logout" type="button" id="voteLogoutBtn">Выйти</button>
+          <div class="vote-auth__user-info">
+            <p class="vote-auth__user">Личный кабинет: <b id="voteUserName"></b></p>
+            <p class="vote-auth__bzd-note">В личном кабинете скоро появятся лист рассадки и данные о входе в БЗДК</p>
+          </div>
+          <div class="vote-auth__bar-btns">
+            <button class="vote-auth__cabinet-btn" type="button" id="voteOpenCabinetBtn">Профиль</button>
+            <button class="vote-auth__logout" type="button" id="voteLogoutBtn">Выйти</button>
+          </div>
         </div>
       </div>
 
-      <!-- карточки финалистов (заполняет script.js) -->
+      <!-- карточки финалистов (заполняет script.js, открываются только после регистрации/входа) -->
       <div class="vote-grid" id="voteGrid" hidden></div>
     </div>
   </section>
@@ -1218,6 +1217,166 @@
     </div>
   </footer>
 
-  <script src="script.js?v=44"></script>
+  <!-- ======= МОДАЛЬНОЕ ОКНО: ЛИЧНЫЙ КАБИНЕТ ПОЛЬЗОВАТЕЛЯ ======= -->
+  <div class="cabinet-modal" id="cabinetModal" hidden aria-hidden="true">
+    <div class="cabinet-modal__backdrop" id="cabinetBackdrop"></div>
+    <div class="cabinet-modal__dialog" role="dialog" aria-modal="true" aria-labelledby="cabinetModalTitle">
+      <button class="cabinet-modal__close" id="closeCabinetBtn" type="button" aria-label="Закрыть личный кабинет">
+        <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+          <path d="M18 6L6 18M6 6l12 12"/>
+        </svg>
+      </button>
+
+      <h3 class="cabinet-modal__title" id="cabinetModalTitle">Личный кабинет</h3>
+
+      <!-- Экран для неавторизованного пользователя: Регистрация и Вход -->
+      <div class="cabinet-guest" id="cabinetGuestView">
+        <div class="cabinet-tabs" role="tablist">
+          <button class="cabinet-tab is-active" type="button" data-cab-tab="register" id="cabTabRegister" role="tab" aria-selected="true">Регистрация</button>
+          <button class="cabinet-tab" type="button" data-cab-tab="login" id="cabTabLogin" role="tab" aria-selected="false">Вход</button>
+        </div>
+
+        <!-- Форма обязательной регистрации -->
+        <form class="cabinet-form" id="cabinetRegForm" autocomplete="off" novalidate>
+          <p class="cabinet-form__hint">Все поля обязательны для заполнения. Без регистрации голосование недоступно.</p>
+
+          <label class="vote-auth__field">
+            <span>Номер телефона (логин) *</span>
+            <input type="tel" id="regPhoneInput" name="phone" placeholder="+7 (999) 000-00-00" required autocomplete="tel">
+          </label>
+
+          <label class="vote-auth__field">
+            <span>ФИО полностью *</span>
+            <input type="text" id="regNameInput" name="fullName" placeholder="Иванов Иван Иванович" required autocomplete="name">
+          </label>
+
+          <div class="cabinet-group-block">
+            <div class="cabinet-group-header">
+              <span class="cabinet-field-label">Учебная группа *</span>
+              <button class="cabinet-not-bmstu-pill" type="button" id="regNotBmstuBtn" aria-pressed="false">
+                <span class="cabinet-not-bmstu-pill__dot"></span>
+                <span>Не из МГТУ им. Н.Э. Баумана</span>
+              </button>
+            </div>
+            <div class="cabinet-group-input-wrap" id="regGroupInputWrap">
+              <input type="text" id="regGroupInput" name="group" placeholder="Например: ИУ10-59 или ФН11-32Б" required>
+            </div>
+          </div>
+
+          <label class="vote-auth__field">
+            <span>За кого болеете *</span>
+            <select id="regSupporterSelect" name="supporterOf" required>
+              <option value="" disabled selected>— Выберите участника или статус —</option>
+              <option value="Гузько Никита Андреевич">Гузько Никита Андреевич</option>
+              <option value="Аксенова Алевтина Александровна">Аксенова Алевтина Александровна</option>
+              <option value="Загирова Алина Тимуровна">Загирова Алина Тимуровна</option>
+              <option value="Щетанова Полина Денисовна">Щетанова Полина Денисовна</option>
+              <option value="Амиров Руслан Рустемович">Амиров Руслан Рустемович</option>
+              <option value="Кузьмичев Максим Олегович">Кузьмичев Максим Олегович</option>
+              <option value="Шумилина Екатерина Владимировна">Шумилина Екатерина Владимировна</option>
+              <option value="Портузенков Ильяс Рафаэлевич">Портузенков Ильяс Рафаэлевич</option>
+              <option value="Данилина Дарья Алексеевна">Данилина Дарья Алексеевна</option>
+              <option value="Просто зритель">Просто зритель</option>
+            </select>
+          </label>
+
+          <div class="vote-auth__field">
+            <label for="regPassInput"><span>Пароль для аккаунта *</span></label>
+            <div class="cabinet-pass-wrap">
+              <input type="password" id="regPassInput" name="password" placeholder="Минимум 8 символов, англ. буквы и спецзнаки" required autocomplete="new-password">
+              <button class="cabinet-pass-toggle" type="button" id="regPassToggle" aria-label="Показать пароль">Показать</button>
+            </div>
+            <ul class="cabinet-pwd-rules" id="regPwdRules">
+              <li id="pwdRuleLen">Минимум 8 символов</li>
+              <li id="pwdRuleEng">Английские буквы (A–Z, a–z, без кириллицы)</li>
+              <li id="pwdRuleSpec">Специальные знаки (! @ # $ % ^ &amp; * _ - + = и др.)</li>
+            </ul>
+          </div>
+
+          <p class="vote-auth__error" id="regErrorMsg" hidden></p>
+
+          <button class="btn-frame vote-auth__submit" type="submit" id="regSubmitBtn">
+            <svg class="btn-frame__svg" viewBox="0 0 320 94" preserveAspectRatio="none" aria-hidden="true">
+              <path d="M6 47 C 30 40 44 24 50 8 L 270 8 C 276 24 290 40 314 47 C 290 54 276 70 270 86 L 50 86 C 44 70 30 54 6 47 Z" fill="none" stroke="url(#frameGrad)" stroke-width="1.6" vector-effect="non-scaling-stroke"/>
+            </svg>
+            <span>Зарегистрироваться</span>
+          </button>
+        </form>
+
+        <!-- Форма входа -->
+        <form class="cabinet-form" id="cabinetLoginForm" autocomplete="off" hidden novalidate>
+          <p class="cabinet-form__hint">Введите номер телефона, указанный при регистрации, и пароль от аккаунта.</p>
+
+          <label class="vote-auth__field">
+            <span>Номер телефона (логин) *</span>
+            <input type="tel" id="loginPhoneInput" name="login" placeholder="+7 (999) 000-00-00" required autocomplete="username">
+          </label>
+
+          <div class="vote-auth__field">
+            <label for="loginPassInput"><span>Пароль *</span></label>
+            <div class="cabinet-pass-wrap">
+              <input type="password" id="loginPassInput" name="password" placeholder="Введите ваш пароль" required autocomplete="current-password">
+              <button class="cabinet-pass-toggle" type="button" id="loginPassToggle" aria-label="Показать пароль">Показать</button>
+            </div>
+          </div>
+
+          <p class="vote-auth__error" id="loginErrorMsg" hidden></p>
+
+          <button class="btn-frame vote-auth__submit" type="submit" id="loginSubmitBtn">
+            <svg class="btn-frame__svg" viewBox="0 0 320 94" preserveAspectRatio="none" aria-hidden="true">
+              <path d="M6 47 C 30 40 44 24 50 8 L 270 8 C 276 24 290 40 314 47 C 290 54 276 70 270 86 L 50 86 C 44 70 30 54 6 47 Z" fill="none" stroke="url(#frameGrad)" stroke-width="1.6" vector-effect="non-scaling-stroke"/>
+            </svg>
+            <span>Войти</span>
+          </button>
+        </form>
+      </div>
+
+      <!-- Экран авторизованного пользователя (Личный кабинет) -->
+      <div class="cabinet-profile" id="cabinetProfileView" hidden>
+        <div class="cabinet-notice-banner" id="cabinetNoticeBanner">
+          <svg class="cabinet-notice-banner__icon" viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <circle cx="12" cy="12" r="10"/>
+            <path d="M12 16v-4M12 8h.01"/>
+          </svg>
+          <p class="cabinet-notice-banner__text">В личном кабинете скоро появятся лист рассадки и данные о входе в БЗДК</p>
+        </div>
+
+        <div class="cabinet-profile__card">
+          <div class="cabinet-profile__row">
+            <span class="cabinet-profile__label">ФИО:</span>
+            <b class="cabinet-profile__val" id="cabProfileName">—</b>
+          </div>
+          <div class="cabinet-profile__row">
+            <span class="cabinet-profile__label">Номер телефона (логин):</span>
+            <b class="cabinet-profile__val" id="cabProfilePhone">—</b>
+          </div>
+          <div class="cabinet-profile__row">
+            <span class="cabinet-profile__label">Учебная группа:</span>
+            <b class="cabinet-profile__val" id="cabProfileGroup">—</b>
+          </div>
+          <div class="cabinet-profile__row">
+            <span class="cabinet-profile__label">За кого болеет:</span>
+            <b class="cabinet-profile__val" id="cabProfileSupporter">—</b>
+          </div>
+          <div class="cabinet-profile__row">
+            <span class="cabinet-profile__label">Статус голосования:</span>
+            <b class="cabinet-profile__val cabinet-profile__val--accent" id="cabProfileVote">Доступно в разделе «Голосование»</b>
+          </div>
+        </div>
+
+        <div class="cabinet-profile__actions">
+          <a class="btn-frame vote-auth__submit" href="#vote" id="cabGoVoteBtn">
+            <svg class="btn-frame__svg" viewBox="0 0 320 94" preserveAspectRatio="none" aria-hidden="true">
+              <path d="M6 47 C 30 40 44 24 50 8 L 270 8 C 276 24 290 40 314 47 C 290 54 276 70 270 86 L 50 86 C 44 70 30 54 6 47 Z" fill="none" stroke="url(#frameGrad)" stroke-width="1.6" vector-effect="non-scaling-stroke"/>
+            </svg>
+            <span>К голосованию</span>
+          </a>
+          <button class="vote-auth__logout" type="button" id="cabLogoutBtn">Выйти из аккаунта</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="script.js?v=45"></script>
 </body>
 </html>

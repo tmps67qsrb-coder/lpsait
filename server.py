@@ -1,21 +1,19 @@
 #!/usr/bin/env python3
 """
-Сервер сайта «Лучший профорг — 2026» с безопасной базой голосования и авторизацией.
-Правило: 1 аккаунт (логин/пароль из БД) = 1 голос.
-Безопасность:
-  - Пароли проверяются по SHA-256 хешу из netlify/functions/users.json
-  - Сессия защищена криптографическим токеном HMAC-SHA256
-  - Защита от перебора паролей (Rate Limiting: 5 попыток / 5 минут)
-  - Атомарное голосование с защитой от повторного/параллельного голоса
-  - Полная блокировка доступа к служебным файлам (.py, .db, .json, .git, netlify)
-Запуск:
-  python3 server.py [порт] (по умолчанию 8080)
+Локальный сервер конкурса «Лучший профорг — 2026».
+- Раздаёт статику сайта (с защитой служебных файлов и исходников).
+- Обрабатывает регистрацию и вход в Личный кабинет по номеру телефона и паролю (SHA-256 + HMAC-токены).
+- Проверяет пароль (минимум 8 символов, английские буквы, спецзнаки).
+- Сохраняет профиль: телефон, ФИО, группа (или «Не из МГТУ им. Н.Э. Баумана»), за кого болеет.
+- Защищает от перебора паролей (Rate Limiting: 5 попыток / 5 мин).
+- Обеспечивает атомарное голосование: 1 аккаунт = 1 голос в SQLite (votes.db).
 """
 
 import hashlib
 import hmac
 import json
 import os
+import re
 import sqlite3
 import sys
 import threading
@@ -28,15 +26,31 @@ DB_PATH = os.path.join(BASE_DIR, "votes.db")
 USERS_JSON_PATH = os.path.join(BASE_DIR, "netlify", "functions", "users.json")
 VALID_IDS = {f"f{i}" for i in range(1, 10)}
 SECRET_KEY = os.environ.get("VOTE_SECRET", "lp2026_bmstu_proforg_session_secret_983").encode("utf-8")
-
 DB_LOCK = threading.Lock()
-ATTEMPT_LOCK = threading.Lock()
-FAILED_ATTEMPTS = {}  # key -> list of float timestamps
+
+VALID_SUPPORTERS = {
+    "Гузько Никита Андреевич",
+    "Аксенова Алевтина Александровна",
+    "Загирова Алина Тимуровна",
+    "Щетанова Полина Денисовна",
+    "Амиров Руслан Рустемович",
+    "Кузьмичев Максим Олегович",
+    "Шумилина Екатерина Владимировна",
+    "Портузенков Ильяс Рафаэлевич",
+    "Данилина Дарья Алексеевна",
+    "Просто зритель",
+}
+
+CABINET_NOTICE = "В личном кабинете скоро появятся лист рассадки и данные о входе в БЗДК"
+
+# Защита от брутфорса: { key: [timestamp1, timestamp2, ...] }
+FAILED_ATTEMPTS = {}
+RATE_LOCK = threading.Lock()
 
 
 def is_rate_limited(key: str) -> bool:
     now = time.time()
-    with ATTEMPT_LOCK:
+    with RATE_LOCK:
         times = [t for t in FAILED_ATTEMPTS.get(key, []) if now - t < 300]
         FAILED_ATTEMPTS[key] = times
         return len(times) >= 5
@@ -44,15 +58,39 @@ def is_rate_limited(key: str) -> bool:
 
 def record_failed_attempt(key: str):
     now = time.time()
-    with ATTEMPT_LOCK:
+    with RATE_LOCK:
         times = [t for t in FAILED_ATTEMPTS.get(key, []) if now - t < 300]
         times.append(now)
         FAILED_ATTEMPTS[key] = times
 
 
 def reset_rate_limit(key: str):
-    with ATTEMPT_LOCK:
+    with RATE_LOCK:
         FAILED_ATTEMPTS.pop(key, None)
+
+
+def normalize_phone(raw: str) -> str:
+    digits = re.sub(r"\D", "", str(raw or "").strip())
+    if len(digits) == 11 and digits[0] in ("7", "8"):
+        return "+7" + digits[1:]
+    if len(digits) == 10 and digits.startswith("9"):
+        return "+7" + digits
+    if 10 <= len(digits) <= 15:
+        return "+" + digits
+    return ""
+
+
+def validate_password_format(password: str):
+    pwd = str(password or "")
+    if len(pwd) < 8:
+        return "Пароль должен содержать минимум 8 символов"
+    if re.search(r"[а-яА-ЯёЁ]", pwd):
+        return "Пароль должен содержать только английские буквы (без русских символов)"
+    if not re.search(r"[a-zA-Z]", pwd):
+        return "Пароль должен содержать английские буквы"
+    if not re.search(r"[^a-zA-Z0-9\s]", pwd):
+        return "Пароль должен содержать хотя бы один специальный знак (например: ! @ # $ % ^ & * _ - + =)"
+    return None
 
 
 def hash_password(password: str) -> str:
@@ -66,7 +104,7 @@ def create_token(login: str) -> str:
     return f"{login}.{expiry}.{sig}"
 
 
-def verify_token(token: str) -> str:
+def verify_token(token: str):
     if not token or not isinstance(token, str):
         return None
     parts = token.split(".")
@@ -83,11 +121,10 @@ def verify_token(token: str) -> str:
     expected_sig = hmac.new(SECRET_KEY, data, hashlib.sha256).hexdigest()
     if not hmac.compare_digest(sig, expected_sig):
         return None
-    return login
+    return login.lower()
 
 
 def sync_users_from_json(conn: sqlite3.Connection):
-    """Синхронизирует хеши пользователей из netlify/functions/users.json в SQLite."""
     if not os.path.exists(USERS_JSON_PATH):
         return
     try:
@@ -95,6 +132,7 @@ def sync_users_from_json(conn: sqlite3.Connection):
             items = json.load(f)
         if not isinstance(items, list):
             return
+        cur = conn.cursor()
         for item in items:
             if not isinstance(item, dict):
                 continue
@@ -103,14 +141,23 @@ def sync_users_from_json(conn: sqlite3.Connection):
             if not pwd_hash and item.get("password"):
                 pwd_hash = hash_password(str(item.get("password")))
             if login and pwd_hash:
-                conn.execute(
+                cur.execute(
                     """
-                    INSERT INTO users (login, password_hash)
-                    VALUES (?, ?)
+                    INSERT INTO users (login, password_hash, full_name, study_group, not_bmstu, supporter_of, created_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
                     ON CONFLICT(login) DO UPDATE SET password_hash = excluded.password_hash
                     """,
-                    (login, pwd_hash),
+                    (
+                        login,
+                        pwd_hash,
+                        str(item.get("fullName") or login),
+                        str(item.get("group") or "МГТУ им. Н.Э. Баумана"),
+                        1 if item.get("notBmstu") else 0,
+                        str(item.get("supporterOf") or "Просто зритель"),
+                        int(time.time()),
+                    ),
                 )
+        conn.commit()
     except Exception:
         pass
 
@@ -121,10 +168,28 @@ def init_db():
             """
             CREATE TABLE IF NOT EXISTS users (
                 login TEXT PRIMARY KEY,
-                password_hash TEXT NOT NULL
+                password_hash TEXT NOT NULL,
+                full_name TEXT DEFAULT '',
+                study_group TEXT DEFAULT '',
+                not_bmstu INTEGER DEFAULT 0,
+                supporter_of TEXT DEFAULT '',
+                created_at INTEGER DEFAULT 0
             )
             """
         )
+        # Миграция для уже созданной таблицы users
+        for col_sql in (
+            "ALTER TABLE users ADD COLUMN full_name TEXT DEFAULT ''",
+            "ALTER TABLE users ADD COLUMN study_group TEXT DEFAULT ''",
+            "ALTER TABLE users ADD COLUMN not_bmstu INTEGER DEFAULT 0",
+            "ALTER TABLE users ADD COLUMN supporter_of TEXT DEFAULT ''",
+            "ALTER TABLE users ADD COLUMN created_at INTEGER DEFAULT 0",
+        ):
+            try:
+                conn.execute(col_sql)
+            except sqlite3.OperationalError:
+                pass
+
         conn.execute(
             """
             CREATE TABLE IF NOT EXISTS votes (
@@ -143,20 +208,44 @@ def init_db():
             "CREATE INDEX IF NOT EXISTS idx_votes_candidate ON votes(candidate_id)"
         )
         sync_users_from_json(conn)
-        conn.commit()
 
 
-def verify_user(cur: sqlite3.Cursor, login: str, password: str) -> bool:
-    if not login or not password:
-        return False
+def get_user_profile(cur: sqlite3.Cursor, login_key: str):
+    if not login_key:
+        return None
     row = cur.execute(
-        "SELECT password_hash FROM users WHERE login = ? LIMIT 1",
-        (login.lower(),),
+        """
+        SELECT login, password_hash, full_name, study_group, not_bmstu, supporter_of
+        FROM users WHERE login = ? LIMIT 1
+        """,
+        (login_key.lower(),),
     ).fetchone()
     if not row:
-        return False
-    stored_hash = row[0].lower()
-    return hmac.compare_digest(stored_hash, hash_password(password).lower())
+        return None
+    not_bmstu_flag = bool(row[4])
+    return {
+        "login": row[0],
+        "password_hash": row[1],
+        "profile": {
+            "phone": row[0],
+            "fullName": row[2] or row[0],
+            "group": "Не из МГТУ им. Н.Э. Баумана" if not_bmstu_flag else (row[3] or ""),
+            "notBmstu": not_bmstu_flag,
+            "supporterOf": row[5] or "Просто зритель",
+        },
+    }
+
+
+def verify_user(cur: sqlite3.Cursor, login_key: str, password: str):
+    if not login_key or not password:
+        return None
+    user_obj = get_user_profile(cur, login_key)
+    if not user_obj:
+        return None
+    stored_hash = user_obj["password_hash"].lower()
+    if hmac.compare_digest(stored_hash, hash_password(password).lower()):
+        return user_obj
+    return None
 
 
 def find_existing_vote_by_login(cur: sqlite3.Cursor, login: str):
@@ -203,15 +292,21 @@ class ProforgHandler(SimpleHTTPRequestHandler):
         if clean_path == "/api/votes":
             qs = urllib.parse.parse_qs(parsed.query)
             token = (qs.get("token", [""])[0] or "").strip()
-            login = (qs.get("login", [""])[0] or "").strip().lower()
+            raw_login = (qs.get("login", [""])[0] or "").strip()
+            norm_phone = normalize_phone(raw_login)
+            expected_login = (norm_phone or raw_login).lower()
             authenticated_login = verify_token(token)
 
             with DB_LOCK, sqlite3.connect(DB_PATH) as conn:
                 cur = conn.cursor()
                 counts = get_all_counts(cur)
                 my_vote = None
-                if authenticated_login and authenticated_login == login:
+                profile = None
+                if authenticated_login and authenticated_login == expected_login:
                     my_vote = find_existing_vote_by_login(cur, authenticated_login)
+                    user_obj = get_user_profile(cur, authenticated_login)
+                    if user_obj:
+                        profile = user_obj["profile"]
 
             total = sum(counts.values())
             self._send_json(
@@ -221,6 +316,7 @@ class ProforgHandler(SimpleHTTPRequestHandler):
                     "my_vote": my_vote,
                     "total": total,
                     "login": authenticated_login,
+                    "profile": profile,
                 },
             )
             return
@@ -259,13 +355,107 @@ class ProforgHandler(SimpleHTTPRequestHandler):
             return
 
         action = str(data.get("action") or "vote").strip()
-        login = str(data.get("login") or "").strip().lower()[:128]
         client_ip = self.client_address[0]
-        rl_key = f"{client_ip}:{login or 'general'}"
 
-        # 1. АВТОРИЗАЦИЯ
+        # 1. РЕГИСТРАЦИЯ В ЛИЧНОМ КАБИНЕТЕ
+        if action == "register":
+            raw_phone = str(data.get("phone") or data.get("login") or "").strip()
+            phone = normalize_phone(raw_phone)
+            full_name = str(data.get("fullName") or "").strip()[:140]
+            not_bmstu = bool(data.get("notBmstu"))
+            raw_group = str(data.get("group") or "").strip()[:60]
+            study_group = "Не из МГТУ им. Н.Э. Баумана" if not_bmstu else raw_group
+            supporter_of = str(data.get("supporterOf") or "").strip()
+            password = str(data.get("password") or "").strip()
+
+            if not phone:
+                self._send_json(
+                    400,
+                    {"ok": False, "error": "Введите корректный номер телефона (например, +7 999 123-45-67)"},
+                )
+                return
+            if len(full_name) < 3 or " " not in full_name:
+                self._send_json(400, {"ok": False, "error": "Введите ваше полное ФИО"})
+                return
+            if not not_bmstu and not raw_group:
+                self._send_json(
+                    400,
+                    {"ok": False, "error": "Укажите учебную группу или выберите «Не из МГТУ им. Н.Э. Баумана»"},
+                )
+                return
+            if not supporter_of or supporter_of not in VALID_SUPPORTERS:
+                self._send_json(
+                    400,
+                    {"ok": False, "error": "Выберите участника, за которого болеете, или «Просто зритель»"},
+                )
+                return
+
+            pwd_error = validate_password_format(password)
+            if pwd_error:
+                self._send_json(400, {"ok": False, "error": pwd_error})
+                return
+
+            with DB_LOCK, sqlite3.connect(DB_PATH) as conn:
+                cur = conn.cursor()
+                existing_user = get_user_profile(cur, phone)
+                if existing_user:
+                    self._send_json(
+                        409,
+                        {
+                            "ok": False,
+                            "error": "Этот номер телефона уже зарегистрирован. Перейдите во вкладку «Вход».",
+                        },
+                    )
+                    return
+
+                cur.execute(
+                    """
+                    INSERT INTO users (login, password_hash, full_name, study_group, not_bmstu, supporter_of, created_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        phone.lower(),
+                        hash_password(password),
+                        full_name,
+                        study_group,
+                        1 if not_bmstu else 0,
+                        supporter_of,
+                        int(time.time()),
+                    ),
+                )
+                conn.commit()
+                counts = get_all_counts(cur)
+                total = sum(counts.values())
+
+            token = create_token(phone.lower())
+            self._send_json(
+                200,
+                {
+                    "ok": True,
+                    "login": phone.lower(),
+                    "token": token,
+                    "profile": {
+                        "phone": phone,
+                        "fullName": full_name,
+                        "group": study_group,
+                        "notBmstu": not_bmstu,
+                        "supporterOf": supporter_of,
+                    },
+                    "my_vote": None,
+                    "counts": None,
+                    "total": total,
+                    "cabinet_notice": CABINET_NOTICE,
+                },
+            )
+            return
+
+        # 2. АВТОРИЗАЦИЯ В ЛИЧНОМ КАБИНЕТЕ
         if action == "login":
+            raw_login = str(data.get("login") or data.get("phone") or "").strip()[:128]
+            norm_phone = normalize_phone(raw_login)
+            login_key = (norm_phone or raw_login).lower()
             password = str(data.get("password") or "").strip()[:128]
+            rl_key = f"{client_ip}:{login_key or 'general'}"
 
             if is_rate_limited(rl_key):
                 self._send_json(
@@ -280,17 +470,19 @@ class ProforgHandler(SimpleHTTPRequestHandler):
             with DB_LOCK, sqlite3.connect(DB_PATH) as conn:
                 sync_users_from_json(conn)
                 cur = conn.cursor()
-                if not verify_user(cur, login, password):
+                user_obj = verify_user(cur, login_key, password)
+                if not user_obj:
                     record_failed_attempt(rl_key)
                     self._send_json(
                         401,
-                        {"ok": False, "error": "Неверный логин или пароль"},
+                        {"ok": False, "error": "Неверный номер телефона или пароль"},
                     )
                     return
 
                 reset_rate_limit(rl_key)
-                token = create_token(login)
-                my_vote = find_existing_vote_by_login(cur, login)
+                canonical_login = user_obj["login"]
+                token = create_token(canonical_login)
+                my_vote = find_existing_vote_by_login(cur, canonical_login)
                 counts = get_all_counts(cur)
                 total = sum(counts.values())
 
@@ -298,26 +490,31 @@ class ProforgHandler(SimpleHTTPRequestHandler):
                 200,
                 {
                     "ok": True,
-                    "login": login,
+                    "login": canonical_login,
                     "token": token,
+                    "profile": user_obj["profile"],
                     "my_vote": my_vote,
                     "counts": counts if my_vote else None,
                     "total": total,
+                    "cabinet_notice": CABINET_NOTICE,
                 },
             )
             return
 
-        # 2. ГОЛОСОВАНИЕ
+        # 3. ГОЛОСОВАНИЕ
         if action == "vote":
+            raw_login = str(data.get("login") or "").strip()[:128]
+            norm_phone = normalize_phone(raw_login)
+            expected_login = (norm_phone or raw_login).lower()
             token = str(data.get("token") or "").strip()
             authenticated_login = verify_token(token)
 
-            if not authenticated_login or authenticated_login != login:
+            if not authenticated_login or authenticated_login != expected_login:
                 self._send_json(
                     401,
                     {
                         "ok": False,
-                        "error": "Сессия истекла или недействительна. Войдите снова.",
+                        "error": "Сессия истекла или недействительна. Войдите в личный кабинет.",
                     },
                 )
                 return

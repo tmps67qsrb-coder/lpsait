@@ -121,13 +121,12 @@ const ALLY = [
   });
 })();
 
-// ---------- Секция «Голосование»: обязательный вход по логину и паролю (1 аккаунт = 1 голос) ----------
-// Проверка логина и пароля выполняется через БД (/api/votes -> users.json / SQLite).
-// Каждый аккаунт может проголосовать строго 1 раз.
+// ---------- Личный кабинет и секция «Голосование» (Обязательная регистрация: 1 аккаунт = 1 голос) ----------
 const VOTE_OPEN_AT = new Date("2026-12-08T16:30:00+03:00").getTime();
 const LS_AUTH = "lp26_auth_user";
 const LS_VOTES_BY_USER = "lp26_votes_by_user";
 const LS_COUNTS = "lp26_counts";
+const LS_LOCAL_PROFILES = "lp26_local_profiles";
 
 const FINALISTS = ALLY.map((p, i) => ({
   id: "f" + (i + 1),
@@ -145,11 +144,53 @@ const voteSub = document.getElementById("voteSub");
 const voteAuthFormWrap = document.getElementById("voteAuthFormWrap");
 const voteUserBar = document.getElementById("voteUserBar");
 const voteUserName = document.getElementById("voteUserName");
-const voteLoginForm = document.getElementById("voteLoginForm");
-const voteLoginInput = document.getElementById("voteLoginInput");
-const votePassInput = document.getElementById("votePassInput");
 const voteAuthError = document.getElementById("voteAuthError");
 const voteLogoutBtn = document.getElementById("voteLogoutBtn");
+const voteOpenRegBtn = document.getElementById("voteOpenRegBtn");
+const voteOpenLoginBtn = document.getElementById("voteOpenLoginBtn");
+const voteOpenCabinetBtn = document.getElementById("voteOpenCabinetBtn");
+
+// Элементы Личного кабинета
+const openCabinetHeaderBtn = document.getElementById("openCabinetHeaderBtn");
+const headerCabinetLabel = document.getElementById("headerCabinetLabel");
+const cabinetModal = document.getElementById("cabinetModal");
+const cabinetBackdrop = document.getElementById("cabinetBackdrop");
+const closeCabinetBtn = document.getElementById("closeCabinetBtn");
+const cabinetGuestView = document.getElementById("cabinetGuestView");
+const cabinetProfileView = document.getElementById("cabinetProfileView");
+const cabTabRegister = document.getElementById("cabTabRegister");
+const cabTabLogin = document.getElementById("cabTabLogin");
+const cabinetRegForm = document.getElementById("cabinetRegForm");
+const cabinetLoginForm = document.getElementById("cabinetLoginForm");
+
+// Поля регистрации
+const regPhoneInput = document.getElementById("regPhoneInput");
+const regNameInput = document.getElementById("regNameInput");
+const regNotBmstuBtn = document.getElementById("regNotBmstuBtn");
+const regGroupInputWrap = document.getElementById("regGroupInputWrap");
+const regGroupInput = document.getElementById("regGroupInput");
+const regSupporterSelect = document.getElementById("regSupporterSelect");
+const regPassInput = document.getElementById("regPassInput");
+const regPassToggle = document.getElementById("regPassToggle");
+const regErrorMsg = document.getElementById("regErrorMsg");
+const pwdRuleLen = document.getElementById("pwdRuleLen");
+const pwdRuleEng = document.getElementById("pwdRuleEng");
+const pwdRuleSpec = document.getElementById("pwdRuleSpec");
+
+// Поля входа
+const loginPhoneInput = document.getElementById("loginPhoneInput");
+const loginPassInput = document.getElementById("loginPassInput");
+const loginPassToggle = document.getElementById("loginPassToggle");
+const loginErrorMsg = document.getElementById("loginErrorMsg");
+
+// Элементы профиля в Личном кабинете
+const cabProfileName = document.getElementById("cabProfileName");
+const cabProfilePhone = document.getElementById("cabProfilePhone");
+const cabProfileGroup = document.getElementById("cabProfileGroup");
+const cabProfileSupporter = document.getElementById("cabProfileSupporter");
+const cabProfileVote = document.getElementById("cabProfileVote");
+const cabGoVoteBtn = document.getElementById("cabGoVoteBtn");
+const cabLogoutBtn = document.getElementById("cabLogoutBtn");
 
 const readJSON = (key, fallback) => {
   try { return JSON.parse(localStorage.getItem(key)) ?? fallback; }
@@ -160,26 +201,168 @@ const writeJSON = (key, val) => {
   catch {}
 };
 
-let currentUser = readJSON(LS_AUTH, null); // { login, token }
+let currentUser = readJSON(LS_AUTH, null); // { login, token, profile }
 if (currentUser && (!currentUser.token || !currentUser.login)) {
   currentUser = null;
   try { localStorage.removeItem(LS_AUTH); } catch {}
 }
 let votingInProgress = false;
+let isNotBmstu = false;
 
 const voteIsOpen = () => voteDemo || Date.now() >= VOTE_OPEN_AT;
+const isLoggedIn = () => Boolean(currentUser && currentUser.login && currentUser.token);
+
+function normalizePhoneClient(raw) {
+  const digits = String(raw || "").replace(/\D/g, "");
+  if (digits.length === 11 && (digits.startsWith("8") || digits.startsWith("7"))) {
+    return "+7" + digits.slice(1);
+  }
+  if (digits.length === 10 && digits.startsWith("9")) {
+    return "+7" + digits;
+  }
+  if (digits.length >= 10 && digits.length <= 15) {
+    return "+" + digits;
+  }
+  return "";
+}
+
+function checkPasswordRules(pwd) {
+  const str = String(pwd || "");
+  const lenOk = str.length >= 8;
+  const hasEng = /[a-zA-Z]/.test(str);
+  const hasCyr = /[а-яА-ЯёЁ]/.test(str);
+  const engOk = hasEng && !hasCyr;
+  const specOk = /[^a-zA-Z0-9\s]/.test(str);
+  return { lenOk, engOk, specOk, hasCyr, allOk: lenOk && engOk && specOk };
+}
+
+function updatePasswordChecklist() {
+  if (!regPassInput) return;
+  const r = checkPasswordRules(regPassInput.value);
+  if (pwdRuleLen) pwdRuleLen.classList.toggle("is-valid", r.lenOk);
+  if (pwdRuleEng) pwdRuleEng.classList.toggle("is-valid", r.engOk);
+  if (pwdRuleSpec) pwdRuleSpec.classList.toggle("is-valid", r.specOk);
+}
+
+if (regPassInput) {
+  regPassInput.addEventListener("input", updatePasswordChecklist);
+}
+
+function bindPassToggle(btn, input) {
+  if (!btn || !input) return;
+  btn.addEventListener("click", () => {
+    const isPass = input.type === "password";
+    input.type = isPass ? "text" : "password";
+    btn.textContent = isPass ? "Скрыть" : "Показать";
+  });
+}
+bindPassToggle(regPassToggle, regPassInput);
+bindPassToggle(loginPassToggle, loginPassInput);
+
+// Переключатель плашки «Не из МГТУ им. Н.Э. Баумана»
+function setNotBmstuState(active) {
+  isNotBmstu = Boolean(active);
+  if (regNotBmstuBtn) {
+    regNotBmstuBtn.classList.toggle("is-active", isNotBmstu);
+    regNotBmstuBtn.setAttribute("aria-pressed", String(isNotBmstu));
+  }
+  if (regGroupInputWrap) {
+    regGroupInputWrap.hidden = isNotBmstu;
+  }
+  if (regGroupInput) {
+    regGroupInput.required = !isNotBmstu;
+    regGroupInput.disabled = isNotBmstu;
+    if (isNotBmstu) regGroupInput.value = "";
+  }
+}
+
+if (regNotBmstuBtn) {
+  regNotBmstuBtn.addEventListener("click", () => {
+    setNotBmstuState(!isNotBmstu);
+  });
+}
+
+// Переключение вкладок Регистрация / Вход
+function switchCabinetTab(tabName) {
+  const isReg = tabName !== "login";
+  if (cabTabRegister) {
+    cabTabRegister.classList.toggle("is-active", isReg);
+    cabTabRegister.setAttribute("aria-selected", String(isReg));
+  }
+  if (cabTabLogin) {
+    cabTabLogin.classList.toggle("is-active", !isReg);
+    cabTabLogin.setAttribute("aria-selected", String(!isReg));
+  }
+  if (cabinetRegForm) cabinetRegForm.hidden = !isReg;
+  if (cabinetLoginForm) cabinetLoginForm.hidden = isReg;
+  if (regErrorMsg) regErrorMsg.hidden = true;
+  if (loginErrorMsg) loginErrorMsg.hidden = true;
+}
+
+if (cabTabRegister) {
+  cabTabRegister.addEventListener("click", () => switchCabinetTab("register"));
+}
+if (cabTabLogin) {
+  cabTabLogin.addEventListener("click", () => switchCabinetTab("login"));
+}
+
+// Открытие / закрытие модального окна Личного кабинета
+function openCabinetModal(preferredTab) {
+  if (!cabinetModal) return;
+  updateAuthUI();
+  if (!isLoggedIn() && preferredTab) {
+    switchCabinetTab(preferredTab);
+  }
+  cabinetModal.hidden = false;
+  cabinetModal.setAttribute("aria-hidden", "false");
+  document.body.style.overflow = "hidden";
+}
+
+function closeCabinetModal() {
+  if (!cabinetModal) return;
+  cabinetModal.hidden = true;
+  cabinetModal.setAttribute("aria-hidden", "true");
+  document.body.style.overflow = "";
+}
+
+if (openCabinetHeaderBtn) {
+  openCabinetHeaderBtn.addEventListener("click", () => openCabinetModal("register"));
+}
+if (voteOpenRegBtn) {
+  voteOpenRegBtn.addEventListener("click", () => openCabinetModal("register"));
+}
+if (voteOpenLoginBtn) {
+  voteOpenLoginBtn.addEventListener("click", () => openCabinetModal("login"));
+}
+if (voteOpenCabinetBtn) {
+  voteOpenCabinetBtn.addEventListener("click", () => openCabinetModal());
+}
+if (closeCabinetBtn) {
+  closeCabinetBtn.addEventListener("click", closeCabinetModal);
+}
+if (cabinetBackdrop) {
+  cabinetBackdrop.addEventListener("click", closeCabinetModal);
+}
+if (cabGoVoteBtn) {
+  cabGoVoteBtn.addEventListener("click", () => closeCabinetModal());
+}
+window.addEventListener("keydown", (e) => {
+  if (e.key === "Escape" && cabinetModal && !cabinetModal.hidden) {
+    closeCabinetModal();
+  }
+});
 
 function getMyVoteForUser(login) {
   if (!login) return null;
   const map = readJSON(LS_VOTES_BY_USER, {});
-  return map[login] || null;
+  return map[login.toLowerCase()] || map[login] || null;
 }
 
 function setMyVoteForUser(login, candidateId) {
   if (!login) return;
   const map = readJSON(LS_VOTES_BY_USER, {});
   if (candidateId) {
-    map[login] = { id: candidateId, ts: Date.now() };
+    map[login.toLowerCase()] = { id: candidateId, ts: Date.now() };
   }
   writeJSON(LS_VOTES_BY_USER, map);
 }
@@ -189,11 +372,50 @@ const localCounts = () => readJSON(LS_COUNTS, {});
 const displayName = (f, i) => [f.name, f.surname].filter(Boolean).join(" ").trim() || "Участник " + (i + 1);
 
 function updateAuthUI() {
-  const loggedIn = Boolean(currentUser && currentUser.login);
+  const loggedIn = isLoggedIn();
+  const prof = (currentUser && currentUser.profile) || {};
+  const displayUser = prof.fullName || (currentUser && currentUser.login) || "";
+
   if (voteAuthFormWrap) voteAuthFormWrap.hidden = loggedIn;
   if (voteUserBar) voteUserBar.hidden = !loggedIn;
-  if (voteUserName && loggedIn) voteUserName.textContent = currentUser.login;
+  if (voteUserName && loggedIn) voteUserName.textContent = displayUser;
   if (voteAuthError) voteAuthError.hidden = true;
+
+  if (headerCabinetLabel) {
+    headerCabinetLabel.textContent = "Личный кабинет";
+  }
+
+  if (cabinetGuestView) cabinetGuestView.hidden = loggedIn;
+  if (cabinetProfileView) cabinetProfileView.hidden = !loggedIn;
+
+  if (loggedIn) {
+    if (cabProfileName) cabProfileName.textContent = prof.fullName || currentUser.login;
+    if (cabProfilePhone) cabProfilePhone.textContent = prof.phone || currentUser.login;
+    if (cabProfileGroup) {
+      cabProfileGroup.textContent = prof.notBmstu
+        ? "Не из МГТУ им. Н.Э. Баумана"
+        : prof.group || "МГТУ им. Н.Э. Баумана";
+    }
+    if (cabProfileSupporter) cabProfileSupporter.textContent = prof.supporterOf || "Просто зритель";
+    if (cabProfileVote) {
+      const my = myVote();
+      if (my && my.id) {
+        const chosenFin = FINALISTS.find((f) => f.id === my.id);
+        cabProfileVote.textContent = chosenFin
+          ? `Голос отдан: ${chosenFin.name}`
+          : "Голос учтён";
+      } else if (voteIsOpen()) {
+        cabProfileVote.textContent = "Голосование открыто — выберите кандидата";
+      } else {
+        cabProfileVote.textContent = "Голосование откроется 8 декабря в 16:30";
+      }
+    }
+  }
+
+  // Без обязательной регистрации и входа карточки голосования не открываются
+  if (voteGrid) {
+    voteGrid.hidden = !(voteIsOpen() && loggedIn);
+  }
 }
 
 function showAuthError(msg) {
@@ -202,8 +424,20 @@ function showAuthError(msg) {
   voteAuthError.hidden = !msg;
 }
 
+function showRegError(msg) {
+  if (!regErrorMsg) return;
+  regErrorMsg.textContent = msg;
+  regErrorMsg.hidden = !msg;
+}
+
+function showLoginError(msg) {
+  if (!loginErrorMsg) return;
+  loginErrorMsg.textContent = msg;
+  loginErrorMsg.hidden = !msg;
+}
+
 function renderVoteCards() {
-  const loggedIn = Boolean(currentUser && currentUser.login);
+  const loggedIn = isLoggedIn();
   const my = myVote();
   const counts = localCounts();
   voteGrid.innerHTML = "";
@@ -214,7 +448,6 @@ function renderVoteCards() {
     const groupHtml = f.group ? `<small class="alley-card__group">${f.group}</small>` : "";
     const card = document.createElement("article");
     card.className = "alley-card vote-card" + (chosen ? " is-chosen" : "");
-    // счётчики всех участников открываются после того, как аккаунт проголосовал
     const votesBlock = my
       ? `<p class="vote-card__votes"><b data-votes="${f.id}">${total}</b><small>голосов</small></p>`
       : "";
@@ -251,7 +484,6 @@ function renderVoteCards() {
   });
 }
 
-// Обновление счётчиков на карточках без полной перерисовки фото
 function applyServerState(data) {
   if (!data || typeof data !== "object") return;
   const prevVote = myVote();
@@ -263,6 +495,12 @@ function applyServerState(data) {
   if (currentUser && currentUser.login && data.my_vote) {
     setMyVoteForUser(currentUser.login, data.my_vote);
   }
+  if (currentUser && data.profile && typeof data.profile === "object") {
+    currentUser.profile = data.profile;
+    writeJSON(LS_AUTH, currentUser);
+  }
+
+  updateAuthUI();
 
   const nowVote = myVote();
   const nowId = nowVote ? nowVote.id : null;
@@ -310,97 +548,215 @@ async function syncVotesFromServer() {
   }
 }
 
-async function verifyCredentialsWithDB(login, password) {
-  if (location.protocol === "file:") {
-    return {
-      ok: false,
-      error: "Для авторизации запустите сайт через сервер (python server.py или Netlify)",
-    };
-  }
-  try {
-    const res = await fetch("/api/votes", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      credentials: "same-origin",
-      body: JSON.stringify({ action: "login", login, password }),
-    });
-    const data = await res.json().catch(() => null);
-    if (res.status === 429) {
-      return {
-        ok: false,
-        error: (data && data.error) || "Слишком много неудачных попыток входа. Подождите 5 минут.",
-      };
+// Отправка регистрации
+if (cabinetRegForm) {
+  cabinetRegForm.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    showRegError("");
+
+    const rawPhone = (regPhoneInput.value || "").trim();
+    const phone = normalizePhoneClient(rawPhone);
+    const fullName = (regNameInput.value || "").trim();
+    const groupVal = isNotBmstu ? "Не из МГТУ им. Н.Э. Баумана" : (regGroupInput.value || "").trim();
+    const supporterOf = (regSupporterSelect.value || "").trim();
+    const password = (regPassInput.value || "").trim();
+    const pwdCheck = checkPasswordRules(password);
+
+    // Обязательная проверка каждого пункта
+    if (!phone) {
+      showRegError("Введите корректный номер телефона (10–11 цифр)");
+      regPhoneInput.focus();
+      return;
     }
-    if (res.status === 401) {
-      return {
-        ok: false,
-        error: (data && data.error) || "Неверный логин или пароль",
-      };
+    if (!fullName || fullName.length < 3 || !fullName.includes(" ")) {
+      showRegError("Пожалуйста, укажите полное ФИО (Фамилия Имя Отчество)");
+      regNameInput.focus();
+      return;
     }
-    if (res.ok && data && data.ok) {
-      return { ok: true, data };
+    if (!isNotBmstu && !groupVal) {
+      showRegError("Укажите вашу учебную группу или нажмите плашку «Не из МГТУ им. Н.Э. Баумана»");
+      regGroupInput.focus();
+      return;
     }
-    return {
-      ok: false,
-      error: (data && data.error) || "Ошибка авторизации",
+    if (!supporterOf) {
+      showRegError("Выберите, за кого вы болеете (или пункт «Просто зритель»)");
+      regSupporterSelect.focus();
+      return;
+    }
+    if (!pwdCheck.lenOk) {
+      showRegError("Пароль должен содержать минимум 8 символов");
+      regPassInput.focus();
+      return;
+    }
+    if (pwdCheck.hasCyr || !pwdCheck.engOk) {
+      showRegError("Пароль должен содержать английские буквы (без кириллицы)");
+      regPassInput.focus();
+      return;
+    }
+    if (!pwdCheck.specOk) {
+      showRegError("Пароль должен содержать хотя бы один специальный знак (! @ # $ % ^ & * _ - + = и др.)");
+      regPassInput.focus();
+      return;
+    }
+
+    const payload = {
+      action: "register",
+      phone,
+      fullName,
+      group: groupVal,
+      notBmstu: isNotBmstu,
+      supporterOf,
+      password,
     };
-  } catch {
-    return {
-      ok: false,
-      error: "Сервер авторизации временно недоступен",
-    };
-  }
+
+    if (location.protocol !== "file:") {
+      try {
+        const res = await fetch("/api/votes", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "same-origin",
+          body: JSON.stringify(payload),
+        });
+        const data = await res.json().catch(() => null);
+        if (!res.ok || !data || !data.ok) {
+          showRegError((data && data.error) || "Ошибка при регистрации. Проверьте введённые данные.");
+          return;
+        }
+        currentUser = {
+          login: data.login || phone,
+          token: data.token,
+          profile: data.profile || {
+            phone,
+            fullName,
+            group: groupVal,
+            notBmstu: isNotBmstu,
+            supporterOf,
+          },
+        };
+        writeJSON(LS_AUTH, currentUser);
+        regPassInput.value = "";
+        updatePasswordChecklist();
+        applyServerState(data);
+        updateAuthUI();
+        renderVoteCards();
+        return;
+      } catch {
+        showRegError("Сервер временно недоступен. Попробуйте чуть позже.");
+        return;
+      }
+    } else {
+      // Локальный режим при открытии по file://
+      const localProfiles = readJSON(LS_LOCAL_PROFILES, {});
+      if (localProfiles[phone]) {
+        showRegError("Этот номер телефона уже зарегистрирован. Перейдите во вкладку «Вход».");
+        return;
+      }
+      const profile = { phone, fullName, group: groupVal, notBmstu: isNotBmstu, supporterOf };
+      localProfiles[phone] = { ...profile, password };
+      writeJSON(LS_LOCAL_PROFILES, localProfiles);
+      currentUser = { login: phone, token: "local." + Date.now(), profile };
+      writeJSON(LS_AUTH, currentUser);
+      regPassInput.value = "";
+      updatePasswordChecklist();
+      updateAuthUI();
+      renderVoteCards();
+    }
+  });
 }
 
-if (voteLoginForm) {
-  voteLoginForm.addEventListener("submit", async (e) => {
+// Отправка входа
+if (cabinetLoginForm) {
+  cabinetLoginForm.addEventListener("submit", async (e) => {
     e.preventDefault();
-    const login = (voteLoginInput.value || "").trim();
-    const password = (votePassInput.value || "").trim();
-    if (!login || !password) {
-      showAuthError("Введите логин и пароль");
+    showLoginError("");
+
+    const rawLogin = (loginPhoneInput.value || "").trim();
+    const normPhone = normalizePhoneClient(rawLogin);
+    const loginKey = normPhone || rawLogin;
+    const password = (loginPassInput.value || "").trim();
+
+    if (!loginKey || !password) {
+      showLoginError("Введите номер телефона и пароль");
       return;
     }
-    showAuthError("");
-    const result = await verifyCredentialsWithDB(login, password);
-    if (!result.ok) {
-      showAuthError(result.error || "Неверный логин или пароль");
-      return;
+
+    if (location.protocol !== "file:") {
+      try {
+        const res = await fetch("/api/votes", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "same-origin",
+          body: JSON.stringify({ action: "login", login: loginKey, password }),
+        });
+        const data = await res.json().catch(() => null);
+        if (res.status === 429) {
+          showLoginError((data && data.error) || "Слишком много попыток входа. Подождите 5 минут.");
+          return;
+        }
+        if (!res.ok || !data || !data.ok) {
+          showLoginError((data && data.error) || "Неверный номер телефона или пароль");
+          return;
+        }
+        currentUser = {
+          login: data.login || loginKey,
+          token: data.token,
+          profile: data.profile || { phone: loginKey, fullName: loginKey },
+        };
+        writeJSON(LS_AUTH, currentUser);
+        loginPassInput.value = "";
+        applyServerState(data);
+        updateAuthUI();
+        renderVoteCards();
+        return;
+      } catch {
+        showLoginError("Сервер авторизации временно недоступен");
+        return;
+      }
+    } else {
+      const localProfiles = readJSON(LS_LOCAL_PROFILES, {});
+      const found = localProfiles[loginKey];
+      if (!found || found.password !== password) {
+        showLoginError("Неверный номер телефона или пароль");
+        return;
+      }
+      currentUser = {
+        login: loginKey,
+        token: "local." + Date.now(),
+        profile: {
+          phone: found.phone,
+          fullName: found.fullName,
+          group: found.group,
+          notBmstu: found.notBmstu,
+          supporterOf: found.supporterOf,
+        },
+      };
+      writeJSON(LS_AUTH, currentUser);
+      loginPassInput.value = "";
+      updateAuthUI();
+      renderVoteCards();
     }
-    currentUser = {
-      login: (result.data && result.data.login) || login,
-      token: result.data && result.data.token,
-    };
-    writeJSON(LS_AUTH, currentUser);
-    votePassInput.value = "";
-    updateAuthUI();
-    if (result.data) {
-      applyServerState(result.data);
-    }
-    voteStateShown = null;
-    refreshVote();
-    renderVoteCards();
   });
+}
+
+function handleLogout() {
+  currentUser = null;
+  try { localStorage.removeItem(LS_AUTH); } catch {}
+  updateAuthUI();
+  switchCabinetTab("login");
+  renderVoteCards();
 }
 
 if (voteLogoutBtn) {
-  voteLogoutBtn.addEventListener("click", () => {
-    currentUser = null;
-    try { localStorage.removeItem(LS_AUTH); } catch {}
-    updateAuthUI();
-    voteStateShown = null;
-    refreshVote();
-    renderVoteCards();
-  });
+  voteLogoutBtn.addEventListener("click", handleLogout);
+}
+if (cabLogoutBtn) {
+  cabLogoutBtn.addEventListener("click", handleLogout);
 }
 
 async function voteFor(id) {
-  if (!currentUser || !currentUser.login || !currentUser.token) {
-    showAuthError("Для голосования необходимо войти по логину и паролю");
-    if (voteLoginInput) {
-      voteLoginInput.scrollIntoView({ behavior: "smooth", block: "center" });
-      voteLoginInput.focus();
-    }
+  if (!isLoggedIn()) {
+    showAuthError("Для голосования необходимо зарегистрироваться или войти в личный кабинет");
+    openCabinetModal("register");
     return;
   }
   if (myVote() || votingInProgress) return;
@@ -408,8 +764,12 @@ async function voteFor(id) {
   voteGrid.querySelectorAll("button").forEach((b) => (b.disabled = true));
 
   if (location.protocol === "file:") {
+    const counts = localCounts();
+    counts[id] = (counts[id] || 0) + 1;
+    writeJSON(LS_COUNTS, counts);
+    setMyVoteForUser(currentUser.login, id);
     votingInProgress = false;
-    showAuthError("Голосование доступно только при запуске через сервер (python server.py или Netlify)");
+    updateAuthUI();
     renderVoteCards();
     return;
   }
@@ -433,7 +793,7 @@ async function voteFor(id) {
       try { localStorage.removeItem(LS_AUTH); } catch {}
       votingInProgress = false;
       updateAuthUI();
-      showAuthError("Сессия истекла — пожалуйста, войдите снова");
+      showAuthError("Сессия истекла — пожалуйста, войдите в личный кабинет снова");
       renderVoteCards();
       return;
     }
@@ -462,15 +822,18 @@ async function voteFor(id) {
 let voteStateShown = null;
 function refreshVote() {
   const open = voteIsOpen();
+  const loggedIn = isLoggedIn();
   if (open !== voteStateShown) {
     voteStateShown = open;
     voteLocked.hidden = open;
     if (voteAuth) voteAuth.hidden = !open;
-    voteGrid.hidden = !open;
     voteSub.textContent = open
       ? "Выбери лучшего профорга МГТУ — один аккаунт, один голос"
       : "Выбор лучшего профорга откроется вместе с финалом конкурса";
     if (open) syncVotesFromServer();
+  }
+  if (voteGrid) {
+    voteGrid.hidden = !(open && loggedIn);
   }
   if (!open) {
     const left = Math.max(0, VOTE_OPEN_AT - Date.now());
