@@ -1008,28 +1008,24 @@ document.querySelectorAll(".faq__item").forEach((item) => {
 
   tracks.forEach((track) => {
     const hero = track.closest(".sky--hero");
-    const footer = track.closest(".sky--footer");
-    let count;
-    if (hero) count = isMobile ? 56 : 120;
-    else if (footer) count = isMobile ? 14 : 32;
-    else count = isMobile ? 20 : 42;
+    const count = isMobile ? 56 : 120;
 
     const frag = document.createDocumentFragment();
     for (let i = 0; i < count; i++) {
       const s = document.createElement("span");
       s.className = "h-star";
       const r = Math.random();
-      const size = r < 0.5 ? 1 : r < 0.8 ? 1.5 : r < 0.95 ? 2 : 2.6;
+      const size = r < 0.45 ? 1 : r < 0.78 ? 1.5 : r < 0.93 ? 2 : 2.7;
       s.style.width = s.style.height = size + "px";
       s.style.left = (Math.random() * 50).toFixed(3) + "%";
       s.style.top = (Math.random() * 100).toFixed(3) + "%";
       s.style.setProperty("--d", (2.2 + Math.random() * 4).toFixed(2) + "s");
       s.style.setProperty("--dl", (-Math.random() * 6).toFixed(2) + "s");
-      s.style.setProperty("--o", (0.35 + Math.random() * 0.5).toFixed(2));
-      if (size > 2) {
+      s.style.setProperty("--o", (0.4 + Math.random() * 0.55).toFixed(2));
+      if (size >= 2) {
         s.classList.add("h-star--glow");
         s.style.setProperty("--star-c", Math.random() < 0.5 ? "#8ce0ff" : "#ffffff");
-      } else if (Math.random() < 0.28) {
+      } else if (Math.random() < 0.32) {
         s.style.setProperty("--star-c", "#93d5ff");
       }
       frag.appendChild(s);
@@ -1037,9 +1033,53 @@ document.querySelectorAll(".faq__item").forEach((item) => {
     track.appendChild(frag);
     track.innerHTML += track.innerHTML;
     if (!hero) {
-      // у секций скорость дрейфа своя, чтобы небо не двигалось синхронно
       track.style.animationDuration = (210 + Math.random() * 110).toFixed(0) + "s";
     }
+  });
+
+  // Добавляем на все остальные секции и подвал такие же космические элементы, как на главном экране:
+  // S-образный млечный путь (stardust), 3D гранёные звёзды, туманность, орбиты, метеоры и спутники
+  const sections = document.querySelectorAll(".section, .footer");
+  sections.forEach((sec, idx) => {
+    const flip = idx % 2 === 1 ? " section__stardust--flip" : "";
+    const altOrbit = idx % 2 === 1 ? " section__orbit--alt" : "";
+    const shootDelay1 = (1.5 + (idx * 3.1) % 9).toFixed(1);
+    const shootDelay2 = (6.2 + (idx * 2.7) % 10).toFixed(1);
+
+    const cosmicWrap = document.createElement("div");
+    cosmicWrap.className = "section-cosmic-bg";
+    cosmicWrap.setAttribute("aria-hidden", "true");
+    cosmicWrap.innerHTML = `
+      <div class="section__glow"></div>
+      <div class="section__orbit${altOrbit}"></div>
+      <svg class="section__stardust${flip}" viewBox="0 0 1440 960" preserveAspectRatio="none">
+        <g fill="none" stroke="url(#stardustHeroGrad)" stroke-linecap="round">
+          <use href="#stardustCurve" stroke-width="62" stroke-opacity=".018"/>
+          <use href="#stardustCurve" stroke-width="44" stroke-opacity=".026"/>
+          <use href="#stardustCurve" stroke-width="30" stroke-opacity=".035"/>
+          <use href="#stardustCurve" stroke-width="20" stroke-opacity=".048"/>
+          <use href="#stardustCurve" stroke-width="12" stroke-opacity=".065"/>
+          <use href="#stardustCurve" stroke-width="6" stroke-opacity=".095"/>
+          <use href="#stardustCurve" stroke-width="3" stroke-opacity=".14"/>
+          <use href="#stardustCurve" stroke-width="1.4" stroke-opacity=".48"/>
+        </g>
+        <path d="M1340 -20 C1150 225 830 272 440 364 C50 456 -20 662 335 802 C655 925 1030 950 1390 1010" fill="none" stroke="#8ce0ff" stroke-width="1" stroke-dasharray="2 14" stroke-linecap="round" opacity=".48"/>
+        <g fill="#ffffff">
+          <circle cx="1095" cy="146" r="2.3" opacity=".85"/>
+          <circle cx="810" cy="258" r="2.6" opacity=".9"/>
+          <circle cx="615" cy="306" r="1.9" opacity=".8"/>
+          <circle cx="240" cy="422" r="2.3" opacity=".85"/>
+          <circle cx="115" cy="545" r="2.8" opacity=".9"/>
+          <circle cx="460" cy="832" r="2.4" opacity=".85"/>
+        </g>
+      </svg>
+      <svg class="section-chrome-star section-chrome-star--l"><use href="#chrome-star"/></svg>
+      <svg class="section-chrome-star section-chrome-star--r"><use href="#chrome-star"/></svg>
+      <svg class="section-chrome-star section-chrome-star--sm"><use href="#chrome-star"/></svg>
+      <div class="hero-shoot" style="top:18%;left:14%;animation:shootStar 14s ease-in ${shootDelay1}s infinite"></div>
+      <div class="hero-shoot" style="top:62%;left:52%;animation:shootStar 18s ease-in ${shootDelay2}s infinite"></div>
+    `;
+    sec.insertBefore(cosmicWrap, sec.firstChild);
   });
 })();
 
