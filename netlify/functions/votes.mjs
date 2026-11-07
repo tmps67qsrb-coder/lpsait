@@ -159,7 +159,7 @@ function formatPublicProfile(userObj) {
 }
 
 export default async (req) => {
-  const store = getStore("proforg-votes-2026");
+  const store = getStore("proforg-votes-2026-v2");
   const url = new URL(req.url);
 
   if (req.method === "POST") {

@@ -124,9 +124,14 @@ const ALLY = [
 // ---------- Личный кабинет и секция «Голосование» (Обязательная регистрация: 1 аккаунт = 1 голос) ----------
 const VOTE_OPEN_AT = new Date("2026-12-08T16:30:00+03:00").getTime();
 const LS_AUTH = "lp26_auth_user";
-const LS_VOTES_BY_USER = "lp26_votes_by_user";
-const LS_COUNTS = "lp26_counts";
+const LS_VOTES_BY_USER = "lp26_votes_by_user_v2";
+const LS_COUNTS = "lp26_counts_v2";
 const LS_LOCAL_PROFILES = "lp26_local_profiles";
+
+try {
+  localStorage.removeItem("lp26_votes_by_user");
+  localStorage.removeItem("lp26_counts");
+} catch {}
 
 const FINALISTS = ALLY.map((p, i) => ({
   id: "f" + (i + 1),
