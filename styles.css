@@ -673,7 +673,8 @@ b { color: var(--cream); font-weight: 600; }
   line-height: 1.04;
   padding: 0.14em 0.06em 0.08em;
   margin: -0.14em -0.06em -0.08em;
-  letter-spacing: 0.02em;
+  letter-spacing: 0.04em;
+  font-kerning: none;
   text-transform: uppercase;
   background: linear-gradient(
     180deg,
