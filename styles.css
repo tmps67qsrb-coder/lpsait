@@ -29,11 +29,12 @@
     #ffffff 100%
   );
   --font-display: "Viaoda Libre", serif;
-  --font-text: "Manrope", "Roboto", sans-serif;
+  --font-text: "Viaoda Libre", serif;
   --header-h: 84px;
 }
 
 * { margin: 0; padding: 0; box-sizing: border-box; }
+button, input, select, textarea { font-family: inherit; }
 
 html {
   scroll-behavior: smooth;
@@ -3734,20 +3735,24 @@ b { color: var(--cream); font-weight: 600; }
 }
 .cookie-banner__text {
   margin: 0;
-  font-size: 13.5px;
-  line-height: 1.55;
-  color: rgba(235, 245, 255, 0.92);
+  font-family: var(--font-display);
+  font-size: 15px;
+  line-height: 1.5;
+  letter-spacing: 0.03em;
+  color: rgba(235, 245, 255, 0.94);
 }
 .cookie-banner__more {
   display: inline-block;
   margin-left: 6px;
-  font-size: 12px;
-  font-weight: 600;
-  letter-spacing: 0.03em;
+  font-family: var(--font-display);
+  font-size: 13.5px;
+  font-weight: 400;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
   color: var(--accent);
   text-decoration: underline;
   text-underline-offset: 3px;
-  opacity: 0.92;
+  opacity: 0.95;
   transition: color 0.2s ease, text-shadow 0.2s ease, opacity 0.2s ease;
 }
 .cookie-banner__more:hover {
@@ -3782,9 +3787,11 @@ b { color: var(--cream); font-weight: 600; }
 }
 .cabinet-consent-note {
   margin: 2px 0 0;
-  font-size: 12px;
-  line-height: 1.5;
-  color: rgba(190, 212, 242, 0.76);
+  font-family: var(--font-display);
+  font-size: 13.5px;
+  line-height: 1.48;
+  letter-spacing: 0.03em;
+  color: rgba(190, 212, 242, 0.84);
   text-align: center;
 }
 .footer__bottom-links {
@@ -3799,6 +3806,7 @@ b { color: var(--cream); font-weight: 600; }
    ============================================================ */
 .legal-page {
   min-height: 100vh;
+  font-family: var(--font-display);
 }
 .legal-section {
   padding-top: 124px;
@@ -3818,11 +3826,13 @@ b { color: var(--cream); font-weight: 600; }
   box-shadow:
     0 24px 64px rgba(0, 4, 18, 0.78),
     0 0 36px rgba(70, 165, 255, 0.16);
+  font-family: var(--font-display);
 }
 .legal-card__eyebrow {
   margin: 0 0 10px;
-  font-size: 12.5px;
-  letter-spacing: 0.12em;
+  font-family: var(--font-display);
+  font-size: 13.5px;
+  letter-spacing: 0.14em;
   text-transform: uppercase;
   color: var(--accent);
 }
@@ -3841,8 +3851,10 @@ b { color: var(--cream); font-weight: 600; }
   margin: 0 0 28px;
   padding-bottom: 20px;
   border-bottom: 1px solid rgba(165, 220, 255, 0.2);
-  font-size: 13.5px;
-  color: rgba(190, 212, 242, 0.74);
+  font-family: var(--font-display);
+  font-size: 15px;
+  letter-spacing: 0.03em;
+  color: rgba(190, 212, 242, 0.8);
 }
 .legal-content {
   display: grid;
@@ -3852,25 +3864,35 @@ b { color: var(--cream); font-weight: 600; }
   margin: 0 0 10px;
   font-family: var(--font-display);
   font-weight: 400;
-  font-size: 20px;
+  font-size: 21px;
   letter-spacing: 0.05em;
   text-transform: uppercase;
   color: #e6f4ff;
 }
 .legal-block p {
   margin: 0 0 10px;
-  font-size: 14.5px;
-  line-height: 1.7;
-  color: rgba(226, 238, 255, 0.9);
+  font-family: var(--font-display);
+  font-size: 16.5px;
+  line-height: 1.65;
+  letter-spacing: 0.02em;
+  color: rgba(226, 238, 255, 0.92);
 }
 .legal-block ul {
   margin: 8px 0 10px;
   padding-left: 20px;
+  list-style: disc;
   display: grid;
   gap: 8px;
-  font-size: 14.5px;
-  line-height: 1.65;
-  color: rgba(226, 238, 255, 0.9);
+  font-family: var(--font-display);
+  font-size: 16.5px;
+  line-height: 1.6;
+  letter-spacing: 0.02em;
+  color: rgba(226, 238, 255, 0.92);
+}
+.legal-block strong {
+  font-weight: 400;
+  color: #ffffff;
+  text-shadow: 0 0 12px rgba(140, 224, 255, 0.3);
 }
 .legal-block a {
   color: var(--accent);
@@ -3878,11 +3900,13 @@ b { color: var(--cream); font-weight: 600; }
   text-underline-offset: 3px;
 }
 .legal-block code {
-  padding: 2px 6px;
+  font-family: var(--font-display);
+  padding: 2px 7px;
   border-radius: 5px;
   background: rgba(140, 224, 255, 0.12);
   border: 1px solid rgba(140, 224, 255, 0.25);
-  font-size: 13px;
+  font-size: 14.5px;
+  letter-spacing: 0.04em;
   color: #b8e6ff;
 }
 .legal-card__actions {
