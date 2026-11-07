@@ -10,7 +10,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&family=Viaoda+Libre&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css?v=54">
+  <link rel="stylesheet" href="styles.css?v=56">
 </head>
 <body>
 
@@ -237,44 +237,40 @@
       </g>
     </svg>
 
-    <!-- Звёздный S-образный шлейф (млечный путь с афиш «Лучший профорг») -->
+    <!-- Звёздный S-образный шлейф (единая непрерывная линия через весь сайт) -->
     <svg class="hero__stardust fade-in" viewBox="0 0 1440 960" preserveAspectRatio="none" aria-hidden="true">
       <defs>
-        <linearGradient id="stardustHeroGrad" x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0" stop-color="#7fd4ff" stop-opacity="0"/>
-          <stop offset=".2" stop-color="#7fd4ff" stop-opacity=".6"/>
-          <stop offset=".5" stop-color="#dff4ff" stop-opacity=".9"/>
-          <stop offset=".8" stop-color="#4ea8ff" stop-opacity=".6"/>
-          <stop offset="1" stop-color="#3b82f6" stop-opacity="0"/>
+        <linearGradient id="stardustHeroGrad" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stop-color="#7fd4ff" stop-opacity=".85"/>
+          <stop offset=".25" stop-color="#9fe0ff" stop-opacity=".9"/>
+          <stop offset=".5" stop-color="#dff4ff" stop-opacity=".95"/>
+          <stop offset=".75" stop-color="#9fe0ff" stop-opacity=".9"/>
+          <stop offset="1" stop-color="#7fd4ff" stop-opacity=".85"/>
         </linearGradient>
-        <path id="stardustCurve" d="M1320 -40 C1140 210 820 260 430 350 C40 440 -40 650 320 790 C640 915 1020 940 1380 1000"/>
+        <path id="stardustCurve" d="M1260 0 C1260 220 880 300 560 460 C240 620 180 740 180 960"/>
+        <path id="stardustCurveAlt" d="M180 0 C180 220 560 300 880 460 C1200 620 1260 740 1260 960"/>
+        <path id="stardustDash" d="M1284 0 C1284 220 904 300 584 460 C264 620 204 740 204 960"/>
+        <path id="stardustDashAlt" d="M204 0 C204 220 584 300 904 460 C1224 620 1284 740 1284 960"/>
       </defs>
       <!-- Многослойное мягкое свечение без резких границ в любом браузере -->
       <g fill="none" stroke="url(#stardustHeroGrad)" stroke-linecap="round">
-        <use href="#stardustCurve" stroke-width="76" stroke-opacity=".016"/>
-        <use href="#stardustCurve" stroke-width="62" stroke-opacity=".02"/>
-        <use href="#stardustCurve" stroke-width="50" stroke-opacity=".024"/>
-        <use href="#stardustCurve" stroke-width="40" stroke-opacity=".028"/>
-        <use href="#stardustCurve" stroke-width="32" stroke-opacity=".034"/>
-        <use href="#stardustCurve" stroke-width="25" stroke-opacity=".04"/>
-        <use href="#stardustCurve" stroke-width="19" stroke-opacity=".048"/>
-        <use href="#stardustCurve" stroke-width="14" stroke-opacity=".058"/>
-        <use href="#stardustCurve" stroke-width="10" stroke-opacity=".07"/>
-        <use href="#stardustCurve" stroke-width="6.5" stroke-opacity=".09"/>
-        <use href="#stardustCurve" stroke-width="3.8" stroke-opacity=".13"/>
-        <use href="#stardustCurve" stroke-width="1.6" stroke-opacity=".55"/>
+        <use href="#stardustCurve" stroke-width="62" stroke-opacity=".018"/>
+        <use href="#stardustCurve" stroke-width="44" stroke-opacity=".026"/>
+        <use href="#stardustCurve" stroke-width="30" stroke-opacity=".035"/>
+        <use href="#stardustCurve" stroke-width="20" stroke-opacity=".048"/>
+        <use href="#stardustCurve" stroke-width="12" stroke-opacity=".065"/>
+        <use href="#stardustCurve" stroke-width="6" stroke-opacity=".095"/>
+        <use href="#stardustCurve" stroke-width="3" stroke-opacity=".14"/>
+        <use href="#stardustCurve" stroke-width="1.4" stroke-opacity=".48"/>
       </g>
-      <path d="M1340 -20 C1150 225 830 272 440 364 C50 456 -20 662 335 802 C655 925 1030 950 1390 1010" fill="none" stroke="#8ce0ff" stroke-width="1" stroke-dasharray="2 14" stroke-linecap="round" opacity=".55"/>
+      <use href="#stardustDash" fill="none" stroke="#8ce0ff" stroke-width="1" stroke-dasharray="2 14" stroke-linecap="round" opacity=".5"/>
       <g fill="#ffffff">
-        <circle cx="1095" cy="146" r="2.5" opacity=".9"/>
-        <circle cx="960" cy="212" r="1.8" opacity=".8"/>
-        <circle cx="810" cy="258" r="2.8" opacity=".95"/>
-        <circle cx="615" cy="306" r="2" opacity=".85"/>
-        <circle cx="240" cy="422" r="2.4" opacity=".9"/>
-        <circle cx="115" cy="545" r="3" opacity=".95"/>
-        <circle cx="165" cy="680" r="2.2" opacity=".85"/>
-        <circle cx="460" cy="832" r="2.6" opacity=".9"/>
-        <circle cx="790" cy="912" r="2" opacity=".8"/>
+        <circle cx="1216" cy="143" r="2.4" opacity=".88"/>
+        <circle cx="950" cy="263" r="2.7" opacity=".92"/>
+        <circle cx="695" cy="383" r="2.0" opacity=".82"/>
+        <circle cx="425" cy="537" r="2.5" opacity=".88"/>
+        <circle cx="266" cy="675" r="2.8" opacity=".92"/>
+        <circle cx="196" cy="817" r="2.2" opacity=".85"/>
       </g>
     </svg>
 
@@ -1455,6 +1451,6 @@
     </div>
   </div>
 
-  <script src="script.js?v=51"></script>
+  <script src="script.js?v=56"></script>
 </body>
 </html>

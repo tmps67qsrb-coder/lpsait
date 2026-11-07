@@ -338,12 +338,12 @@ b { color: var(--cream); font-weight: 600; }
   50% { opacity: 0.65; }
 }
 
-/* S-образный звёздный шлейф с постеров */
+/* S-образный звёздный шлейф с постеров (единая линия через весь сайт) */
 .hero__stardust {
   position: absolute;
   inset: 0;
   width: 100%;
-  height: 980px;
+  height: 100%;
   pointer-events: none;
   z-index: 0;
   --fade-o: 0.85;
@@ -394,25 +394,9 @@ b { color: var(--cream); font-weight: 600; }
   50% { transform: translateY(-10px) rotate(calc(var(--star-rot, 0deg) + 4deg)); }
 }
 
-/* Сферический горизонт планеты с голубой атмосферой внизу героя */
+/* Сферический горизонт планеты с голубой атмосферой внизу героя (отключён для бесшовной линии через весь сайт) */
 .hero__planet {
-  position: absolute;
-  left: 50%;
-  bottom: -440px;
-  transform: translateX(-50%);
-  width: min(1900px, 175vw);
-  height: 540px;
-  border-radius: 50%;
-  background:
-    radial-gradient(50% 50% at 50% 0%, rgba(12, 29, 74, 0.92) 0%, #020613 72%);
-  border-top: 1.5px solid rgba(170, 225, 255, 0.55);
-  box-shadow:
-    0 -18px 65px rgba(70, 165, 255, 0.32),
-    0 -4px 22px rgba(175, 232, 255, 0.45),
-    inset 0 18px 48px rgba(96, 185, 255, 0.25);
-  pointer-events: none;
-  z-index: 0;
-  --fade-o: 0.75;
+  display: none;
 }
 
 /* ---------- живое звёздное небо (герой + все секции) ---------- */
@@ -1107,27 +1091,16 @@ b { color: var(--cream); font-weight: 600; }
   position: relative;
   padding: 115px 0;
   overflow: hidden;
-  border-top: 1px solid rgba(170, 220, 255, 0.25);
   background:
     radial-gradient(55% 520px at 50% 14%, rgba(45, 112, 245, 0.24), transparent 72%),
     radial-gradient(38% 420px at 78% 12%, rgba(110, 195, 255, 0.16), transparent 70%),
     radial-gradient(42% 480px at 14% 48%, rgba(30, 88, 220, 0.18), transparent 72%),
     radial-gradient(50% 450px at 85% 65%, rgba(56, 138, 255, 0.15), transparent 74%),
     radial-gradient(85% 520px at 50% 102%, rgba(72, 168, 255, 0.17), transparent 70%),
-    linear-gradient(180deg, #01040d 0%, #03091d 48%, #020613 100%);
+    linear-gradient(180deg, #020613 0%, #03091d 48%, #020613 100%);
 }
 .section::before {
-  content: "";
-  position: absolute;
-  top: -1px;
-  left: 50%;
-  transform: translateX(-50%);
-  width: min(360px, 65vw);
-  height: 2px;
-  background: linear-gradient(90deg, transparent, #ffffff, var(--accent), transparent);
-  box-shadow: 0 0 18px 2px rgba(140, 224, 255, 0.75);
-  pointer-events: none;
-  z-index: 2;
+  display: none;
 }
 .section--soft {
   background:
@@ -1136,7 +1109,7 @@ b { color: var(--cream); font-weight: 600; }
     radial-gradient(44% 460px at 84% 52%, rgba(37, 99, 235, 0.18), transparent 72%),
     radial-gradient(46% 440px at 16% 78%, rgba(56, 138, 255, 0.15), transparent 74%),
     radial-gradient(85% 520px at 50% 102%, rgba(72, 168, 255, 0.17), transparent 70%),
-    linear-gradient(180deg, #020613 0%, #040b22 50%, #01040d 100%);
+    linear-gradient(180deg, #020613 0%, #040b22 50%, #020613 100%);
 }
 
 /* Космические фоновые слои для всех секций (как на главном экране) */
@@ -1170,10 +1143,10 @@ b { color: var(--cream); font-weight: 600; }
   inset: 0;
   width: 100%;
   height: 100%;
-  min-height: 760px;
+  min-height: 0;
   pointer-events: none;
   z-index: 0;
-  opacity: 0.78;
+  opacity: 0.85;
   overflow: visible;
 }
 .section__stardust--flip {
@@ -2599,23 +2572,13 @@ b { color: var(--cream); font-weight: 600; }
 .footer {
   position: relative;
   overflow: hidden;
-  border-top: 1px solid rgba(175, 220, 255, 0.28);
   background:
     radial-gradient(55% 440px at 50% 0%, rgba(45, 112, 245, 0.22), transparent 70%),
     radial-gradient(40% 380px at 80% 100%, rgba(140, 224, 255, 0.12), transparent 74%),
-    linear-gradient(180deg, #03091d 0%, #01040d 100%);
+    linear-gradient(180deg, #020613 0%, #01040d 100%);
 }
 .footer::before {
-  content: "";
-  position: absolute;
-  top: -1px; left: 50%;
-  transform: translateX(-50%);
-  width: min(360px, 65vw);
-  height: 2px;
-  background: linear-gradient(90deg, transparent, #ffffff, var(--accent), transparent);
-  box-shadow: 0 0 18px 2px rgba(140, 224, 255, 0.8);
-  pointer-events: none;
-  z-index: 2;
+  display: none;
 }
 .footer__inner {
   display: flex;

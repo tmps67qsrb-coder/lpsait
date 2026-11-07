@@ -1403,10 +1403,29 @@ document.querySelectorAll(".faq__item").forEach((item) => {
   });
 
   // Добавляем на все остальные секции и подвал такие же космические элементы, как на главном экране:
-  // S-образный млечный путь (stardust), 3D гранёные звёзды, туманность, орбиты, метеоры и спутники
+  // единый непрерывный S-образный млечный путь (stardust), 3D гранёные звёзды, туманность, орбиты, метеоры
   const sections = document.querySelectorAll(".section, .footer");
   sections.forEach((sec, idx) => {
-    const flip = idx % 2 === 1 ? " section__stardust--flip" : "";
+    const isAlt = idx % 2 === 0; // Hero заканчивается слева внизу (x=180), поэтому чётные секции (idx 0, 2, 4, 6) идут слева направо (180 -> 1260), а нечётные (idx 1, 3, 5, 7) — справа налево (1260 -> 180)
+    const curveId = isAlt ? "#stardustCurveAlt" : "#stardustCurve";
+    const dashId = isAlt ? "#stardustDashAlt" : "#stardustDash";
+    const starsMarkup = isAlt
+      ? `
+          <circle cx="224" cy="143" r="2.3" opacity=".85"/>
+          <circle cx="490" cy="263" r="2.6" opacity=".9"/>
+          <circle cx="745" cy="383" r="1.9" opacity=".8"/>
+          <circle cx="1015" cy="537" r="2.3" opacity=".85"/>
+          <circle cx="1174" cy="675" r="2.8" opacity=".9"/>
+          <circle cx="1244" cy="817" r="2.4" opacity=".85"/>
+        `
+      : `
+          <circle cx="1216" cy="143" r="2.3" opacity=".85"/>
+          <circle cx="950" cy="263" r="2.6" opacity=".9"/>
+          <circle cx="695" cy="383" r="1.9" opacity=".8"/>
+          <circle cx="425" cy="537" r="2.3" opacity=".85"/>
+          <circle cx="266" cy="675" r="2.8" opacity=".9"/>
+          <circle cx="196" cy="817" r="2.4" opacity=".85"/>
+        `;
     const altOrbit = idx % 2 === 1 ? " section__orbit--alt" : "";
     const shootDelay1 = (1.5 + (idx * 3.1) % 9).toFixed(1);
     const shootDelay2 = (6.2 + (idx * 2.7) % 10).toFixed(1);
@@ -1417,26 +1436,19 @@ document.querySelectorAll(".faq__item").forEach((item) => {
     cosmicWrap.innerHTML = `
       <div class="section__glow"></div>
       <div class="section__orbit${altOrbit}"></div>
-      <svg class="section__stardust${flip}" viewBox="0 0 1440 960" preserveAspectRatio="none">
+      <svg class="section__stardust" viewBox="0 0 1440 960" preserveAspectRatio="none">
         <g fill="none" stroke="url(#stardustHeroGrad)" stroke-linecap="round">
-          <use href="#stardustCurve" stroke-width="62" stroke-opacity=".018"/>
-          <use href="#stardustCurve" stroke-width="44" stroke-opacity=".026"/>
-          <use href="#stardustCurve" stroke-width="30" stroke-opacity=".035"/>
-          <use href="#stardustCurve" stroke-width="20" stroke-opacity=".048"/>
-          <use href="#stardustCurve" stroke-width="12" stroke-opacity=".065"/>
-          <use href="#stardustCurve" stroke-width="6" stroke-opacity=".095"/>
-          <use href="#stardustCurve" stroke-width="3" stroke-opacity=".14"/>
-          <use href="#stardustCurve" stroke-width="1.4" stroke-opacity=".48"/>
+          <use href="${curveId}" stroke-width="62" stroke-opacity=".018"/>
+          <use href="${curveId}" stroke-width="44" stroke-opacity=".026"/>
+          <use href="${curveId}" stroke-width="30" stroke-opacity=".035"/>
+          <use href="${curveId}" stroke-width="20" stroke-opacity=".048"/>
+          <use href="${curveId}" stroke-width="12" stroke-opacity=".065"/>
+          <use href="${curveId}" stroke-width="6" stroke-opacity=".095"/>
+          <use href="${curveId}" stroke-width="3" stroke-opacity=".14"/>
+          <use href="${curveId}" stroke-width="1.4" stroke-opacity=".48"/>
         </g>
-        <path d="M1340 -20 C1150 225 830 272 440 364 C50 456 -20 662 335 802 C655 925 1030 950 1390 1010" fill="none" stroke="#8ce0ff" stroke-width="1" stroke-dasharray="2 14" stroke-linecap="round" opacity=".48"/>
-        <g fill="#ffffff">
-          <circle cx="1095" cy="146" r="2.3" opacity=".85"/>
-          <circle cx="810" cy="258" r="2.6" opacity=".9"/>
-          <circle cx="615" cy="306" r="1.9" opacity=".8"/>
-          <circle cx="240" cy="422" r="2.3" opacity=".85"/>
-          <circle cx="115" cy="545" r="2.8" opacity=".9"/>
-          <circle cx="460" cy="832" r="2.4" opacity=".85"/>
-        </g>
+        <use href="${dashId}" fill="none" stroke="#8ce0ff" stroke-width="1" stroke-dasharray="2 14" stroke-linecap="round" opacity=".5"/>
+        <g fill="#ffffff">${starsMarkup}</g>
       </svg>
       <svg class="section-chrome-star section-chrome-star--l"><use href="#chrome-star"/></svg>
       <svg class="section-chrome-star section-chrome-star--r"><use href="#chrome-star"/></svg>
