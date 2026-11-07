@@ -14,6 +14,8 @@ const VALID_IDS = new Set(["f1", "f2", "f3", "f4", "f5", "f6", "f7", "f8", "f9"]
 const SECRET_KEY = process.env.VOTE_SECRET || "lp2026_bmstu_proforg_session_secret_983";
 const ENC_KEY = crypto.createHash("sha256").update(SECRET_KEY).digest();
 const PBKDF2_ITERATIONS = 100000;
+const MAX_BODY_BYTES = 4096;
+const MAX_TRACKED_KEYS = 5000;
 
 const VALID_SUPPORTERS = new Set([
   "Гузько Никита Андреевич",
@@ -33,24 +35,89 @@ const JSON_HEADERS = {
   "Cache-Control": "no-store, no-cache, must-revalidate",
   "X-Content-Type-Options": "nosniff",
   "X-Frame-Options": "DENY",
+  "X-XSS-Protection": "1; mode=block",
 };
 
-function jsonResponse(payload, status = 200) {
+function jsonResponse(payload, status = 200, extraHeaders = {}) {
   return new Response(JSON.stringify(payload), {
     status,
-    headers: JSON_HEADERS,
+    headers: { ...JSON_HEADERS, ...extraHeaders },
   });
 }
 
-// Защита от перебора паролей и спама регистраций
+// ============================================================
+// ЗАЩИТА ОТ DDOS / FLOOD, АВТО-БЛОКИРОВКА IP И ФИЛЬТР SQL-ИНЪЕКЦИЙ
+// ============================================================
 const FAILED_ATTEMPTS = new Map();
+const BANNED_IPS = new Map();
+
+// Короткоживущий кэш состояния голосования (защита хранилища от DDoS чтением)
+let STATE_CACHE = { ts: 0, state: null };
+const STATE_CACHE_TTL_MS = 1500;
+
+// Регулярное выражение WAF для обнаружения попыток SQL-инъекций и NoSQL/Key-инъекций
+const SQLI_PATTERN =
+  /(\b(union\s+all\s+select|union\s+select|select\s+.+\s+from|insert\s+into|update\s+.+\s+set|delete\s+from|drop\s+table|alter\s+table|truncate\s+table|sqlite_master|sqlite_temp_master|information_schema|sleep\s*\(|benchmark\s*\(|waitfor\s+delay|load_file\s*\(|into\s+outfile|attach\s+database|pragma\s+)\b|('|")\s*(or|and)\s*('|"|\d)|\b(or|and)\s+1\s*=\s*1\b|--\s|--$|\/\*|\*\/|;\s*(select|drop|insert|update|delete))/i;
+
+const SAFE_LOGIN_RE = /^(\+[0-9]{10,15}|[a-z0-9_.+-]{3,64})$/;
+const SAFE_NAME_RE = /^[а-яА-ЯёЁa-zA-Z\s-]{3,140}$/;
+const SAFE_GROUP_RE = /^[а-яА-ЯёЁa-zA-Z0-9\s-]{1,60}$/;
+
+function detectSqlInjection(...values) {
+  for (const val of values) {
+    if (val === undefined || val === null) continue;
+    const str = String(val);
+    if (str.includes("\0") || SQLI_PATTERN.test(str)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function pruneMap(map) {
+  if (map.size <= MAX_TRACKED_KEYS) return;
+  const excess = map.size - Math.floor(MAX_TRACKED_KEYS / 2);
+  let i = 0;
+  for (const k of map.keys()) {
+    map.delete(k);
+    if (++i >= excess) break;
+  }
+}
 
 function getClientIp(req) {
   return (
     req.headers.get("x-nf-client-connection-ip") ||
     req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
     "ip_unknown"
-  );
+  ).slice(0, 64);
+}
+
+function isIpBanned(ip) {
+  const now = Date.now();
+  const until = BANNED_IPS.get(ip) || 0;
+  if (until > now) {
+    return Math.ceil((until - now) / 1000);
+  }
+  if (until) BANNED_IPS.delete(ip);
+  return 0;
+}
+
+function banIp(ip, durationMs = 300000) {
+  pruneMap(BANNED_IPS);
+  BANNED_IPS.set(ip, Date.now() + durationMs);
+}
+
+function checkAndRecordRate(key, maxAttempts, windowMs) {
+  const now = Date.now();
+  pruneMap(FAILED_ATTEMPTS);
+  const times = (FAILED_ATTEMPTS.get(key) || []).filter((t) => now - t < windowMs);
+  if (times.length >= maxAttempts) {
+    FAILED_ATTEMPTS.set(key, times);
+    return true;
+  }
+  times.push(now);
+  FAILED_ATTEMPTS.set(key, times);
+  return false;
 }
 
 function getRateLimitKey(req, login) {
@@ -66,6 +133,7 @@ function isRateLimited(key, maxAttempts = 5, windowMs = 300000) {
 
 function recordAttempt(key, windowMs = 300000) {
   const now = Date.now();
+  pruneMap(FAILED_ATTEMPTS);
   const times = (FAILED_ATTEMPTS.get(key) || []).filter((t) => now - t < windowMs);
   times.push(now);
   FAILED_ATTEMPTS.set(key, times);
@@ -77,7 +145,7 @@ function resetRateLimit(key) {
 
 function sanitizeText(str, maxLen = 140) {
   return String(str || "")
-    .replace(/[\u0000-\u001F\u007F<>]/g, "")
+    .replace(/[\u0000-\u001F\u007F<>'";`\\]/g, "")
     .replace(/\s+/g, " ")
     .trim()
     .slice(0, maxLen);
@@ -103,6 +171,9 @@ function validatePasswordFormat(password) {
   if (pwd.length < 8) {
     return "Пароль должен содержать минимум 8 символов";
   }
+  if (pwd.length > 128) {
+    return "Пароль не должен превышать 128 символов";
+  }
   if (/[а-яА-ЯёЁ]/.test(pwd)) {
     return "Пароль должен содержать только английские буквы (без русских символов)";
   }
@@ -119,20 +190,21 @@ function validatePasswordFormat(password) {
 function createPasswordHash(password) {
   const salt = crypto.randomBytes(16).toString("hex");
   const derived = crypto
-    .pbkdf2Sync(String(password).trim(), salt, PBKDF2_ITERATIONS, 32, "sha256")
+    .pbkdf2Sync(String(password).trim().slice(0, 128), salt, PBKDF2_ITERATIONS, 32, "sha256")
     .toString("hex");
   return `pbkdf2$${PBKDF2_ITERATIONS}$${salt}$${derived}`;
 }
 
 function verifyPasswordHash(password, storedHash) {
-  if (!password || !storedHash) return false;
+  if (!password || !storedHash || String(password).length > 128) return false;
   const pwd = String(password).trim();
   const stored = String(storedHash).trim();
 
   if (stored.startsWith("pbkdf2$")) {
     const parts = stored.split("$");
     if (parts.length !== 4) return false;
-    const iterations = parseInt(parts[1], 10);
+    const rawIter = parseInt(parts[1], 10);
+    const iterations = Math.min(Math.max(rawIter || 0, 1000), 300000);
     const salt = parts[2];
     const expectedHex = parts[3];
     if (!iterations || !salt || !expectedHex) return false;
@@ -197,10 +269,11 @@ function createToken(login) {
 }
 
 function verifyToken(token) {
-  if (!token || typeof token !== "string") return null;
+  if (!token || typeof token !== "string" || token.length > 256) return null;
   const parts = token.split(".");
   if (parts.length !== 3) return null;
   const [login, expiryStr, sig] = parts;
+  if (!SAFE_LOGIN_RE.test(login.toLowerCase())) return null;
   const expiry = parseInt(expiryStr, 10);
   if (isNaN(expiry) || expiry < Math.floor(Date.now() / 1000)) return null;
   const data = `${login}:${expiry}`;
@@ -215,10 +288,22 @@ function verifyToken(token) {
   return login;
 }
 
+async function getCachedState(store, forceFresh = false) {
+  const now = Date.now();
+  if (!forceFresh && STATE_CACHE.state && now - STATE_CACHE.ts < STATE_CACHE_TTL_MS) {
+    return STATE_CACHE.state;
+  }
+  const state = (await store.get("state", { type: "json" })) || {
+    counts: { f1: 0, f2: 0, f3: 0, f4: 0, f5: 0, f6: 0, f7: 0, f8: 0, f9: 0 },
+  };
+  STATE_CACHE = { ts: now, state };
+  return state;
+}
+
 async function findUserAccount(store, rawLogin) {
   const normPhone = normalizePhone(rawLogin);
-  const lookupKey = normPhone || String(rawLogin || "").trim().toLowerCase();
-  if (!lookupKey) return null;
+  const lookupKey = (normPhone || String(rawLogin || "").trim()).toLowerCase();
+  if (!lookupKey || !SAFE_LOGIN_RE.test(lookupKey)) return null;
 
   // 1. Ищем в индивидуальном ключе Blobs
   const blobUser = await store.get(`user:${lookupKey}`, { type: "json" });
@@ -264,16 +349,89 @@ function formatPublicProfile(userObj) {
 }
 
 export default async (req) => {
+  const clientIp = getClientIp(req);
+
+  // 0. ПРОВЕРКА АВТО-БАНА IP И ГЛОБАЛЬНОГО АНТИ-DDOS ЛИМИТА
+  const bannedLeft = isIpBanned(clientIp);
+  if (bannedLeft > 0) {
+    return jsonResponse(
+      {
+        ok: false,
+        error: `IP временно заблокирован за подозрительную активность. Подождите ${bannedLeft} сек.`,
+      },
+      429,
+      { "Retry-After": String(bannedLeft) }
+    );
+  }
+
+  if (checkAndRecordRate(`burst:${clientIp}`, 50, 10000)) {
+    banIp(clientIp, 120000);
+    return jsonResponse(
+      { ok: false, error: "Слишком много запросов (защита от DDoS). Подождите 2 минуты." },
+      429,
+      { "Retry-After": "120" }
+    );
+  }
+
+  if (checkAndRecordRate(`api:${clientIp}`, 40, 60000)) {
+    return jsonResponse(
+      { ok: false, error: "Превышен лимит обращений к серверу. Подождите минуту." },
+      429,
+      { "Retry-After": "60" }
+    );
+  }
+
   const store = getStore("proforg-votes-2026-v2");
   const url = new URL(req.url);
 
+  if (detectSqlInjection(url.pathname, url.search)) {
+    banIp(clientIp, 300000);
+    return jsonResponse(
+      { ok: false, error: "Обнаружен недопустимый запрос (WAF SQLi Protection)" },
+      400
+    );
+  }
+
   if (req.method === "POST") {
-    const body = await req.json().catch(() => ({}));
+    const rawText = await req.text().catch(() => "");
+    if (!rawText || rawText.length > MAX_BODY_BYTES) {
+      return jsonResponse({ ok: false, error: "Payload Too Large or Empty" }, 413);
+    }
+
+    let body = {};
+    try {
+      body = JSON.parse(rawText);
+      if (!body || typeof body !== "object" || Array.isArray(body)) {
+        return jsonResponse({ ok: false, error: "Invalid JSON object" }, 400);
+      }
+    } catch {
+      return jsonResponse({ ok: false, error: "Invalid JSON" }, 400);
+    }
+
+    if (
+      detectSqlInjection(
+        body.action,
+        body.phone,
+        body.login,
+        body.fullName,
+        body.group,
+        body.supporterOf,
+        body.id,
+        body.token
+      )
+    ) {
+      banIp(clientIp, 300000);
+      return jsonResponse(
+        { ok: false, error: "Запрос заблокирован системой защиты от SQL-инъекций" },
+        400
+      );
+    }
+
     const action = String(body.action || "vote").trim();
 
     // 1. РЕГИСТРАЦИЯ В ЛИЧНОМ КАБИНЕТЕ
     if (action === "register") {
-      const regRlKey = `reg:${getClientIp(req)}`;
+      const regRlKey = `reg:${clientIp}`;
       if (isRateLimited(regRlKey, 8, 300000)) {
         return jsonResponse(
           { ok: false, error: "Слишком много запросов на регистрацию. Подождите 5 минут." },
@@ -281,7 +439,7 @@ export default async (req) => {
         );
       }
 
-      const rawPhone = String(body.phone || body.login || "").trim();
+      const rawPhone = String(body.phone || body.login || "").trim().slice(0, 64);
       const phone = normalizePhone(rawPhone);
       const fullName = sanitizeText(body.fullName, 140);
       const notBmstu = Boolean(body.notBmstu);
@@ -290,21 +448,21 @@ export default async (req) => {
       const supporterOf = sanitizeText(body.supporterOf, 80);
       const password = String(body.password || "").trim();
 
-      if (!phone) {
+      if (!phone || !SAFE_LOGIN_RE.test(phone.toLowerCase())) {
         return jsonResponse(
           { ok: false, error: "Введите корректный номер телефона (например, +7 999 123-45-67)" },
           400
         );
       }
-      if (!fullName || fullName.length < 3 || !fullName.includes(" ")) {
+      if (!fullName || fullName.length < 3 || !fullName.includes(" ") || !SAFE_NAME_RE.test(fullName)) {
         return jsonResponse(
-          { ok: false, error: "Введите ваше полное ФИО" },
+          { ok: false, error: "Введите ваше полное ФИО (только буквы, пробелы и дефис)" },
           400
         );
       }
-      if (!notBmstu && !rawGroup) {
+      if (!notBmstu && (!rawGroup || !SAFE_GROUP_RE.test(rawGroup))) {
         return jsonResponse(
-          { ok: false, error: "Укажите учебную группу или выберите «Не из МГТУ им. Н.Э. Баумана»" },
+          { ok: false, error: "Укажите корректную учебную группу или выберите «Не из МГТУ им. Н.Э. Баумана»" },
           400
         );
       }
@@ -347,9 +505,7 @@ export default async (req) => {
       await store.setJSON(`user:${phone}`, storedRecord);
 
       const token = createToken(phone);
-      const state = (await store.get("state", { type: "json" })) || {
-        counts: { f1: 0, f2: 0, f3: 0, f4: 0, f5: 0, f6: 0, f7: 0, f8: 0, f9: 0 },
-      };
+      const state = await getCachedState(store);
       const total = Object.values(state.counts).reduce((a, b) => a + b, 0);
 
       return jsonResponse({
@@ -372,17 +528,22 @@ export default async (req) => {
 
     // 2. ВХОД В ЛИЧНЫЙ КАБИНЕТ
     if (action === "login") {
-      const rawLogin = String(body.login || body.phone || "").trim().slice(0, 128);
+      const rawLogin = String(body.login || body.phone || "").trim().slice(0, 64);
       const normPhone = normalizePhone(rawLogin);
-      const loginKey = normPhone || rawLogin.toLowerCase();
+      const loginKey = (normPhone || rawLogin).toLowerCase();
       const password = String(body.password || "").trim().slice(0, 128);
       const rlKey = getRateLimitKey(req, loginKey);
 
-      if (isRateLimited(rlKey)) {
+      if (isRateLimited(rlKey, 5, 300000)) {
         return jsonResponse(
           { ok: false, error: "Слишком много неудачных попыток входа. Попробуйте через 5 минут." },
           429
         );
+      }
+
+      if (!SAFE_LOGIN_RE.test(loginKey)) {
+        recordAttempt(rlKey);
+        return jsonResponse({ ok: false, error: "Неверный номер телефона или пароль" }, 401);
       }
 
       const userAccount = await findUserAccount(store, rawLogin);
@@ -406,9 +567,7 @@ export default async (req) => {
       const voterData = await store.get(`voter:${canonicalLogin}`, { type: "json" });
       const myVote = voterData ? voterData.candidateId : null;
 
-      const state = (await store.get("state", { type: "json" })) || {
-        counts: { f1: 0, f2: 0, f3: 0, f4: 0, f5: 0, f6: 0, f7: 0, f8: 0, f9: 0 },
-      };
+      const state = await getCachedState(store);
       const total = Object.values(state.counts).reduce((a, b) => a + b, 0);
 
       return jsonResponse({
@@ -425,10 +584,17 @@ export default async (req) => {
 
     // 3. ГОЛОСОВАНИЕ
     if (action === "vote") {
-      const rawLogin = String(body.login || "").trim().slice(0, 128);
+      if (checkAndRecordRate(`vote:${clientIp}`, 12, 60000)) {
+        return jsonResponse(
+          { ok: false, error: "Слишком много запросов на голосование. Подождите минуту." },
+          429
+        );
+      }
+
+      const rawLogin = String(body.login || "").trim().slice(0, 64);
       const normPhone = normalizePhone(rawLogin);
       const expectedLogin = normPhone || rawLogin;
-      const token = String(body.token || "").trim();
+      const token = String(body.token || "").trim().slice(0, 256);
       const authenticatedLogin = verifyToken(token);
 
       if (!authenticatedLogin || authenticatedLogin.toLowerCase() !== expectedLogin.toLowerCase()) {
@@ -448,10 +614,7 @@ export default async (req) => {
 
       const voterKey = `voter:${authenticatedLogin}`;
       const existingVote = await store.get(voterKey, { type: "json" });
-
-      const state = (await store.get("state", { type: "json" })) || {
-        counts: { f1: 0, f2: 0, f3: 0, f4: 0, f5: 0, f6: 0, f7: 0, f8: 0, f9: 0 },
-      };
+      const state = await getCachedState(store, true);
 
       if (existingVote) {
         return jsonResponse(
@@ -472,6 +635,7 @@ export default async (req) => {
 
       state.counts[candidateId] = (state.counts[candidateId] || 0) + 1;
       await store.setJSON("state", state);
+      STATE_CACHE = { ts: Date.now(), state };
 
       const total = Object.values(state.counts).reduce((a, b) => a + b, 0);
 
@@ -489,15 +653,18 @@ export default async (req) => {
   }
 
   // 4. ПОЛУЧЕНИЕ СОСТОЯНИЯ И ПРОФИЛЯ (GET)
-  const token = (url.searchParams.get("token") || "").trim();
-  const rawLogin = (url.searchParams.get("login") || "").trim().slice(0, 128);
+  const token = (url.searchParams.get("token") || "").trim().slice(0, 256);
+  const rawLogin = (url.searchParams.get("login") || "").trim().slice(0, 64);
+  if (detectSqlInjection(token, rawLogin)) {
+    banIp(clientIp, 300000);
+    return jsonResponse({ ok: false, error: "Недопустимые параметры запроса" }, 400);
+  }
+
   const normPhone = normalizePhone(rawLogin);
   const expectedLogin = normPhone || rawLogin;
   const authenticatedLogin = token ? verifyToken(token) : null;
 
-  const state = (await store.get("state", { type: "json" })) || {
-    counts: { f1: 0, f2: 0, f3: 0, f4: 0, f5: 0, f6: 0, f7: 0, f8: 0, f9: 0 },
-  };
+  const state = await getCachedState(store);
 
   let myVote = null;
   let profile = null;
