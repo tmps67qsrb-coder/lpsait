@@ -77,7 +77,7 @@ SQLI_PATTERN = re.compile(
 
 SAFE_LOGIN_RE = re.compile(r"^(\+[0-9]{10,15}|[a-z0-9_.+-]{3,64})$")
 SAFE_NAME_RE = re.compile(r"^[а-яА-ЯёЁa-zA-Z\s\-]{3,140}$")
-SAFE_GROUP_RE = re.compile(r"^[а-яА-ЯёЁa-zA-Z0-9\s\-]{1,60}$")
+SAFE_GROUP_RE = re.compile(r"^[а-яА-ЯёЁa-zA-Z0-9\s\-/]{1,60}$")
 
 
 def detect_sql_injection(*values) -> bool:

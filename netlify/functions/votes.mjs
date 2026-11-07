@@ -61,7 +61,7 @@ const SQLI_PATTERN =
 
 const SAFE_LOGIN_RE = /^(\+[0-9]{10,15}|[a-z0-9_.+-]{3,64})$/;
 const SAFE_NAME_RE = /^[а-яА-ЯёЁa-zA-Z\s-]{3,140}$/;
-const SAFE_GROUP_RE = /^[а-яА-ЯёЁa-zA-Z0-9\s-]{1,60}$/;
+const SAFE_GROUP_RE = /^[а-яА-ЯёЁa-zA-Z0-9\s\-/]{1,60}$/;
 
 function detectSqlInjection(...values) {
   for (const val of values) {
