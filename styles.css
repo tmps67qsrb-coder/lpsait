@@ -3673,3 +3673,249 @@ b { color: var(--cream); font-weight: 600; }
   .cabinet-modal__dialog { padding: 26px 18px 22px; }
   .cabinet-group-header { flex-direction: column; align-items: flex-start; gap: 6px; }
 }
+
+/* ============================================================
+   ВСПЛЫВАЮЩАЯ ПЛАШКА COOKIE И ПЕРСОНАЛЬНЫХ ДАННЫХ
+   ============================================================ */
+.cookie-banner {
+  position: fixed;
+  left: 16px;
+  right: 16px;
+  bottom: 20px;
+  z-index: 950;
+  max-width: 960px;
+  margin-inline: auto;
+  pointer-events: none;
+  opacity: 0;
+  transform: translateY(24px);
+  transition: opacity 0.4s cubic-bezier(0.22, 1, 0.36, 1), transform 0.4s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.cookie-banner[hidden] {
+  display: none !important;
+}
+.cookie-banner.is-visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+.cookie-banner__inner {
+  pointer-events: auto;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 16px 22px;
+  border-radius: 16px;
+  border: 1px solid rgba(140, 224, 255, 0.52);
+  background:
+    radial-gradient(90% 140% at 10% 0%, rgba(56, 189, 248, 0.22), transparent 65%),
+    linear-gradient(155deg, rgba(8, 20, 52, 0.96), rgba(3, 9, 26, 0.97));
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  box-shadow:
+    0 18px 48px rgba(0, 4, 18, 0.82),
+    0 0 28px rgba(80, 185, 255, 0.25),
+    inset 0 0 18px rgba(140, 224, 255, 0.08);
+}
+.cookie-banner__icon {
+  flex: 0 0 auto;
+  width: 42px;
+  height: 42px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--accent);
+  background: rgba(140, 224, 255, 0.12);
+  border: 1px solid rgba(140, 224, 255, 0.35);
+  box-shadow: 0 0 14px rgba(140, 224, 255, 0.28);
+}
+.cookie-banner__content {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.cookie-banner__text {
+  margin: 0;
+  font-size: 13.5px;
+  line-height: 1.55;
+  color: rgba(235, 245, 255, 0.92);
+}
+.cookie-banner__more {
+  display: inline-block;
+  margin-left: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  color: var(--accent);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  opacity: 0.92;
+  transition: color 0.2s ease, text-shadow 0.2s ease, opacity 0.2s ease;
+}
+.cookie-banner__more:hover {
+  color: #ffffff;
+  opacity: 1;
+  text-shadow: 0 0 10px rgba(140, 224, 255, 0.75);
+}
+.cookie-banner__actions {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.cookie-banner__accept {
+  cursor: pointer;
+  padding: 10px 24px;
+  border-radius: 999px;
+  border: 1px solid rgba(175, 230, 255, 0.85);
+  background: linear-gradient(135deg, rgba(37, 99, 235, 0.85), rgba(14, 165, 233, 0.88));
+  color: #ffffff;
+  font-family: var(--font-display);
+  font-size: 14.5px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  box-shadow: 0 0 20px rgba(80, 195, 255, 0.42), inset 0 0 10px rgba(255, 255, 255, 0.22);
+  transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+}
+.cookie-banner__accept:hover {
+  transform: translateY(-1px);
+  border-color: #ffffff;
+  box-shadow: 0 0 28px rgba(140, 224, 255, 0.72), inset 0 0 14px rgba(255, 255, 255, 0.35);
+}
+.cabinet-consent-note {
+  margin: 2px 0 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: rgba(190, 212, 242, 0.76);
+  text-align: center;
+}
+.footer__bottom-links {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px 24px;
+}
+
+/* ============================================================
+   СТРАНИЦА ДОКУМЕНТА О ПЕРСОНАЛЬНЫХ ДАННЫХ И COOKIE (privacy.html)
+   ============================================================ */
+.legal-page {
+  min-height: 100vh;
+}
+.legal-section {
+  padding-top: 124px;
+  padding-bottom: 84px;
+  min-height: 100vh;
+}
+.legal-container {
+  max-width: 920px;
+}
+.legal-card {
+  padding: 42px 44px;
+  border-radius: 20px;
+  border: 1px solid rgba(165, 220, 255, 0.38);
+  background:
+    radial-gradient(90% 100% at 50% 0%, rgba(45, 118, 232, 0.2), transparent 65%),
+    linear-gradient(165deg, rgba(7, 17, 44, 0.94), rgba(3, 8, 22, 0.96));
+  box-shadow:
+    0 24px 64px rgba(0, 4, 18, 0.78),
+    0 0 36px rgba(70, 165, 255, 0.16);
+}
+.legal-card__eyebrow {
+  margin: 0 0 10px;
+  font-size: 12.5px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+.legal-card__title {
+  margin: 0 0 12px;
+  font-family: var(--font-display);
+  font-weight: 400;
+  font-size: clamp(24px, 3.4vw, 36px);
+  line-height: 1.22;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #ffffff;
+  text-shadow: 0 0 22px rgba(140, 224, 255, 0.35);
+}
+.legal-card__updated {
+  margin: 0 0 28px;
+  padding-bottom: 20px;
+  border-bottom: 1px solid rgba(165, 220, 255, 0.2);
+  font-size: 13.5px;
+  color: rgba(190, 212, 242, 0.74);
+}
+.legal-content {
+  display: grid;
+  gap: 24px;
+}
+.legal-block h2 {
+  margin: 0 0 10px;
+  font-family: var(--font-display);
+  font-weight: 400;
+  font-size: 20px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: #e6f4ff;
+}
+.legal-block p {
+  margin: 0 0 10px;
+  font-size: 14.5px;
+  line-height: 1.7;
+  color: rgba(226, 238, 255, 0.9);
+}
+.legal-block ul {
+  margin: 8px 0 10px;
+  padding-left: 20px;
+  display: grid;
+  gap: 8px;
+  font-size: 14.5px;
+  line-height: 1.65;
+  color: rgba(226, 238, 255, 0.9);
+}
+.legal-block a {
+  color: var(--accent);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.legal-block code {
+  padding: 2px 6px;
+  border-radius: 5px;
+  background: rgba(140, 224, 255, 0.12);
+  border: 1px solid rgba(140, 224, 255, 0.25);
+  font-size: 13px;
+  color: #b8e6ff;
+}
+.legal-card__actions {
+  margin-top: 34px;
+  padding-top: 24px;
+  border-top: 1px solid rgba(165, 220, 255, 0.2);
+  display: flex;
+  justify-content: center;
+}
+
+@media (max-width: 720px) {
+  .cookie-banner {
+    left: 12px;
+    right: 12px;
+    bottom: 12px;
+  }
+  .cookie-banner__inner {
+    flex-direction: column;
+    align-items: stretch;
+    padding: 15px 16px;
+    gap: 12px;
+  }
+  .cookie-banner__icon {
+    display: none;
+  }
+  .cookie-banner__actions {
+    width: 100%;
+  }
+  .cookie-banner__accept {
+    width: 100%;
+    text-align: center;
+  }
+  .legal-card {
+    padding: 26px 20px;
+  }
+}

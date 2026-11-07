@@ -10,7 +10,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&family=Viaoda+Libre&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css?v=48">
+  <link rel="stylesheet" href="styles.css?v=49">
 </head>
 <body>
 
@@ -1212,7 +1212,10 @@
     </div>
 
     <div class="footer__bottom">
-      <a href="polozhenie-2026.pdf" target="_blank" rel="noopener">Положение о конкурсе (PDF)</a>
+      <div class="footer__bottom-links">
+        <a href="polozhenie-2026.pdf" target="_blank" rel="noopener">Положение о конкурсе (PDF)</a>
+        <a href="privacy.html">Согласие на обработку ПД и Cookie</a>
+      </div>
       <p>2026 © Лучший профорг МГТУ им. Н.Э. Баумана</p>
     </div>
   </footer>
@@ -1294,6 +1297,11 @@
           </div>
 
           <p class="vote-auth__error" id="regErrorMsg" hidden></p>
+
+          <p class="cabinet-consent-note">
+            Нажимая «Зарегистрироваться», вы подтверждаете согласие на обработку персональных данных и использование файлов cookie.
+            <a href="privacy.html" class="cookie-banner__more">Подробнее</a>
+          </p>
 
           <button class="btn-frame vote-auth__submit" type="submit" id="regSubmitBtn">
             <svg class="btn-frame__svg" viewBox="0 0 320 94" preserveAspectRatio="none" aria-hidden="true">
@@ -1377,6 +1385,27 @@
     </div>
   </div>
 
-  <script src="script.js?v=48"></script>
+  <!-- ======= ВСПЛЫВАЮЩАЯ ПЛАШКА: COOKIE И СОГЛАСИЕ НА СБОР ПЕРСОНАЛЬНЫХ ДАННЫХ ======= -->
+  <div class="cookie-banner" id="cookieConsentBanner" role="region" aria-label="Уведомление об использовании файлов cookie и обработке персональных данных" hidden>
+    <div class="cookie-banner__inner">
+      <div class="cookie-banner__icon" aria-hidden="true">
+        <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+          <path d="M9 12l2 2 4-4"/>
+        </svg>
+      </div>
+      <div class="cookie-banner__content">
+        <p class="cookie-banner__text">
+          Мы используем файлы cookie и осуществляем сбор и обработку персональных данных для работы личного кабинета, формирования списков прохода в БЗДК и проведения зрительского голосования. Продолжая использовать сайт или нажимая «Принять», вы соглашаетесь с условиями.
+          <a href="privacy.html" class="cookie-banner__more">Подробнее</a>
+        </p>
+      </div>
+      <div class="cookie-banner__actions">
+        <button class="cookie-banner__accept" type="button" id="cookieAcceptBtn">Принять</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="script.js?v=49"></script>
 </body>
 </html>

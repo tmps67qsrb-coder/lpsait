@@ -1083,5 +1083,47 @@ document.querySelectorAll(".faq__item").forEach((item) => {
   });
 })();
 
+// ---------- Всплывающая плашка: Cookie и согласие на сбор персональных данных ----------
+(function initCookieConsent() {
+  const banner = document.getElementById("cookieConsentBanner");
+  const acceptBtn = document.getElementById("cookieAcceptBtn");
+  if (!banner || !acceptBtn) return;
+
+  const CONSENT_STORAGE_KEY = "lp26_cookie_pd_consent_v1";
+  const CONSENT_COOKIE_NAME = "lp26_cookie_pd_consent";
+
+  function hasConsent() {
+    try {
+      if (localStorage.getItem(CONSENT_STORAGE_KEY) === "1") return true;
+    } catch (e) {}
+    return document.cookie.split(";").some((c) => c.trim().startsWith(CONSENT_COOKIE_NAME + "=1"));
+  }
+
+  function saveConsent() {
+    try {
+      localStorage.setItem(CONSENT_STORAGE_KEY, "1");
+    } catch (e) {}
+    document.cookie =
+      CONSENT_COOKIE_NAME + "=1; path=/; max-age=" + 60 * 60 * 24 * 365 + "; SameSite=Lax";
+  }
+
+  if (!hasConsent()) {
+    banner.hidden = false;
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        banner.classList.add("is-visible");
+      });
+    });
+  }
+
+  acceptBtn.addEventListener("click", () => {
+    saveConsent();
+    banner.classList.remove("is-visible");
+    setTimeout(() => {
+      banner.hidden = true;
+    }, 380);
+  });
+})();
+
 // Регистрация участников проходит в официальной группе конкурса ВКонтакте:
 // https://vk.com/thebestprof (анкета: ФИО, факультет и группа, контакты, согласие на обработку ПД).
