@@ -3,13 +3,13 @@
 Локальный сервер конкурса «Лучший профорг — 2026».
 - Раздаёт статику сайта (с защитой служебных файлов и исходников).
 - Обрабатывает регистрацию и вход в Личный кабинет по номеру телефона и паролю.
+- Содержит 6 фиксированных аккаунтов администраторов (admin1..admin6, без регистрации админов).
+- Право на голосование открывается только при одновременном выполнении двух условий:
+  1) Обязательная регистрация пользователя в Личном кабинете;
+  2) Подтверждение присутствия пользователя администратором через ЛК админа.
 - Пароли хэшируются алгоритмом PBKDF2-HMAC-SHA256 (100 000 итераций + индивидуальная соль).
 - Персональные данные (ФИО, группа, за кого болеет) шифруются перед записью в БД с проверкой целостности (HMAC-SHA256).
-- База SQLite работает в режиме WAL + synchronous=FULL + trusted_schema=OFF для защиты от сбоев и инъекций.
-- Многоуровневая защита от DDoS/DoS-атак (глобальный Rate Limiting по IP, авто-бан при флуде, защита от Slowloris,
-  ограничение числа потоков и параллельных вычислений PBKDF2, кэширование чтения счётчиков).
-- Многоуровневая защита от SQL-инъекций (WAF-фильтр SQLi-сигнатур, строгие белые списки форматов полей и 100% параметризованные запросы `?`).
-- Обеспечивает атомарное голосование: 1 аккаунт = 1 голос.
+- Многоуровневая защита от DDoS/DoS-атак и SQL-инъекций.
 """
 
 import hashlib
@@ -38,6 +38,16 @@ CRYPTO_SEMAPHORE = threading.BoundedSemaphore(4)
 CONN_SEMAPHORE = threading.BoundedSemaphore(64)
 MAX_BODY_BYTES = 4096
 MAX_URI_LEN = 512
+
+# 6 фиксированных аккаунтов администраторов (без возможности регистрации новых админов)
+ADMIN_ACCOUNTS = {
+    "admin1": "pbkdf2$100000$4db9e2f225847f883c894a966ac4a0c5$7e209fb9a8f177efeb51db9a6522f2152f432fc2a5569a00ebbc10ef7feb8ac8",
+    "admin2": "pbkdf2$100000$d814c41b90647a6f84b7c69e67f7f2d0$0f36939d2d296036c0649076e052c71eea79913a563dc8bdf8d5f69388ddca9e",
+    "admin3": "pbkdf2$100000$d57aa932d631aadebe2a95eff487ed57$4a535914707c641cbb2209d7590a7857f539d852cb7e183706781ec175c99ee0",
+    "admin4": "pbkdf2$100000$353d65a24ce027f8726388017dfbac7a$17860788cc28d6ebae58e4294d508bc50310982a0b974ce16652dd759322d7a1",
+    "admin5": "pbkdf2$100000$ac4b4d3def91f2890392f3c25094198a$c32225d0190618a7184809a05d1bd09450e634df5ae85f93bf65741b0b19593a",
+    "admin6": "pbkdf2$100000$900e239b6b7778e8a3f741dac75f547a$05c9ee2e34cfc1bd1699ddbcefba9e6031161d20952c2d0873607ff5149fb8f2",
+}
 
 VALID_SUPPORTERS = {
     "Гузько Никита Андреевич",
@@ -94,14 +104,12 @@ def detect_sql_injection(*values) -> bool:
 def _prune_dict(store: dict, now: float):
     if len(store) <= MAX_TRACKED_KEYS:
         return
-    # Удаляем самые старые ключи при переполнении таблицы (защита памяти от IP-спуфинга)
     excess = len(store) - (MAX_TRACKED_KEYS // 2)
     for k in list(store.keys())[:excess]:
         store.pop(k, None)
 
 
 def is_ip_banned(ip: str) -> int:
-    """Возвращает оставшееся время бана IP в секундах (0, если не забанен)."""
     now = time.time()
     with RATE_LOCK:
         until = BANNED_IPS.get(ip, 0)
@@ -120,7 +128,6 @@ def ban_ip(ip: str, duration_sec: int = 300):
 
 
 def check_and_record_rate(key: str, max_attempts: int, window_sec: int) -> bool:
-    """Атомарно проверяет лимит и записывает запрос. Возвращает True, если лимит превышен."""
     now = time.time()
     with RATE_LOCK:
         _prune_dict(FAILED_ATTEMPTS, now)
@@ -162,7 +169,10 @@ def sanitize_text(val: str, max_len: int = 140) -> str:
 
 
 def normalize_phone(raw: str) -> str:
-    digits = re.sub(r"\D", "", str(raw or "").strip())
+    s = str(raw or "").strip()
+    if s.lower() in ADMIN_ACCOUNTS:
+        return ""
+    digits = re.sub(r"\D", "", s)
     if len(digits) == 11 and digits[0] in ("7", "8"):
         return "+7" + digits[1:]
     if len(digits) == 10 and digits.startswith("9"):
@@ -322,7 +332,7 @@ def sync_users_from_json(conn: sqlite3.Connection):
             if not isinstance(item, dict):
                 continue
             login = str(item.get("login") or "").strip().lower()
-            if not SAFE_LOGIN_RE.match(login):
+            if not SAFE_LOGIN_RE.match(login) or login in ADMIN_ACCOUNTS:
                 continue
             pwd_hash = str(item.get("password_sha256") or "").strip()
             if not pwd_hash and item.get("password"):
@@ -330,8 +340,8 @@ def sync_users_from_json(conn: sqlite3.Connection):
             if login and pwd_hash:
                 cur.execute(
                     """
-                    INSERT INTO users (login, password_hash, full_name, study_group, not_bmstu, supporter_of, created_at)
-                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                    INSERT INTO users (login, password_hash, full_name, study_group, not_bmstu, supporter_of, present, verified_by, created_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                     ON CONFLICT(login) DO UPDATE SET password_hash = excluded.password_hash
                     """,
                     (
@@ -341,6 +351,8 @@ def sync_users_from_json(conn: sqlite3.Connection):
                         encrypt_field(str(item.get("group") or "МГТУ им. Н.Э. Баумана")),
                         1 if item.get("notBmstu") else 0,
                         encrypt_field(str(item.get("supporterOf") or "Просто зритель")),
+                        1 if item.get("present") else 0,
+                        str(item.get("verifiedBy") or ""),
                         int(time.time()),
                     ),
                 )
@@ -360,6 +372,8 @@ def init_db():
                 study_group TEXT DEFAULT '',
                 not_bmstu INTEGER DEFAULT 0,
                 supporter_of TEXT DEFAULT '',
+                present INTEGER DEFAULT 0,
+                verified_by TEXT DEFAULT '',
                 created_at INTEGER DEFAULT 0
             )
             """
@@ -369,6 +383,8 @@ def init_db():
             "ALTER TABLE users ADD COLUMN study_group TEXT DEFAULT ''",
             "ALTER TABLE users ADD COLUMN not_bmstu INTEGER DEFAULT 0",
             "ALTER TABLE users ADD COLUMN supporter_of TEXT DEFAULT ''",
+            "ALTER TABLE users ADD COLUMN present INTEGER DEFAULT 0",
+            "ALTER TABLE users ADD COLUMN verified_by TEXT DEFAULT ''",
             "ALTER TABLE users ADD COLUMN created_at INTEGER DEFAULT 0",
         ):
             try:
@@ -404,7 +420,7 @@ def get_user_profile(cur: sqlite3.Cursor, login_key: str):
         return None
     row = cur.execute(
         """
-        SELECT login, password_hash, full_name, study_group, not_bmstu, supporter_of
+        SELECT login, password_hash, full_name, study_group, not_bmstu, supporter_of, present, verified_by, created_at
         FROM users WHERE login = ? LIMIT 1
         """,
         (clean_login,),
@@ -412,6 +428,8 @@ def get_user_profile(cur: sqlite3.Cursor, login_key: str):
     if not row:
         return None
     not_bmstu_flag = bool(row[4])
+    present_flag = bool(row[6])
+    verified_by = str(row[7] or "")
     dec_name = decrypt_field(row[2]) or row[0]
     dec_group = decrypt_field(row[3]) or ""
     dec_supporter = decrypt_field(row[5]) or "Просто зритель"
@@ -424,8 +442,52 @@ def get_user_profile(cur: sqlite3.Cursor, login_key: str):
             "group": "Не из МГТУ им. Н.Э. Баумана" if not_bmstu_flag else dec_group,
             "notBmstu": not_bmstu_flag,
             "supporterOf": dec_supporter,
+            "present": present_flag,
+            "verifiedBy": verified_by,
         },
     }
+
+
+def list_all_users_for_admin(cur: sqlite3.Cursor) -> list:
+    voted_devices = {
+        r[0]: r[1]
+        for r in cur.execute("SELECT device_id, candidate_id FROM votes").fetchall()
+    }
+    rows = cur.execute(
+        """
+        SELECT login, full_name, study_group, not_bmstu, supporter_of, present, verified_by, created_at
+        FROM users
+        ORDER BY created_at DESC, login ASC
+        """
+    ).fetchall()
+    result = []
+    for row in rows:
+        login = row[0]
+        if login in ADMIN_ACCOUNTS:
+            continue
+        not_bmstu_flag = bool(row[3])
+        dec_name = decrypt_field(row[1]) or login
+        dec_group = decrypt_field(row[2]) or ""
+        dec_supporter = decrypt_field(row[4]) or "Просто зритель"
+        present_flag = bool(row[5])
+        verified_by = str(row[6] or "")
+        created_at = int(row[7] or 0)
+        vote_cid = voted_devices.get(f"user:{login.lower()}")
+        result.append(
+            {
+                "login": login,
+                "phone": login,
+                "fullName": dec_name,
+                "group": "Не из МГТУ им. Н.Э. Баумана" if not_bmstu_flag else dec_group,
+                "notBmstu": not_bmstu_flag,
+                "supporterOf": dec_supporter,
+                "present": present_flag,
+                "verifiedBy": verified_by,
+                "hasVoted": bool(vote_cid),
+                "createdAt": created_at,
+            }
+        )
+    return result
 
 
 def verify_user(cur: sqlite3.Cursor, login_key: str, password: str):
@@ -468,7 +530,6 @@ def get_all_counts(cur: sqlite3.Cursor, use_cache: bool = True):
 
 
 class ProforgHandler(SimpleHTTPRequestHandler):
-    # Защита от Slowloris-атак: закрываем «зависшие» сокеты через 5 секунд
     timeout = 5
 
     def __init__(self, *args, **kwargs):
@@ -498,14 +559,13 @@ class ProforgHandler(SimpleHTTPRequestHandler):
         self.wfile.write(body)
 
     def _check_ddos_and_waf(self, is_api: bool = False) -> bool:
-        """Проверяет IP на бан, длину URI, глобальный лимит запросов (DDoS) и SQLi в URL."""
         client_ip = self.client_address[0]
-        banned_Left = is_ip_banned(client_ip)
-        if banned_Left > 0:
+        banned_left = is_ip_banned(client_ip)
+        if banned_left > 0:
             self._send_json(
                 429,
-                {"ok": False, "error": f"IP временно заблокирован за подозрительную активность. Подождите {banned_Left} сек."},
-                {"Retry-After": str(banned_Left)},
+                {"ok": False, "error": f"IP временно заблокирован за подозрительную активность. Подождите {banned_left} сек."},
+                {"Retry-After": str(banned_left)},
             )
             return False
 
@@ -519,7 +579,6 @@ class ProforgHandler(SimpleHTTPRequestHandler):
             self._send_json(400, {"ok": False, "error": "Обнаружен недопустимый запрос (WAF SQLi Protection)"})
             return False
 
-        # Глобальный анти-DDoS лимит: не более 80 запросов за 10 секунд с одного IP
         if check_and_record_rate(f"burst:{client_ip}", max_attempts=80, window_sec=10):
             ban_ip(client_ip, 120)
             self._send_json(
@@ -529,8 +588,7 @@ class ProforgHandler(SimpleHTTPRequestHandler):
             )
             return False
 
-        # Отдельный лимит на обращения к API: не более 40 запросов в минуту с одного IP
-        if is_api and check_and_record_rate(f"api:{client_ip}", max_attempts=40, window_sec=60):
+        if is_api and check_and_record_rate(f"api:{client_ip}", max_attempts=50, window_sec=60):
             self._send_json(
                 429,
                 {"ok": False, "error": "Превышен лимит обращений к API. Пожалуйста, подождите минуту."},
@@ -571,21 +629,39 @@ class ProforgHandler(SimpleHTTPRequestHandler):
                 counts = get_all_counts(cur, use_cache=True)
                 my_vote = None
                 profile = None
+                is_admin = False
+                admin_users = None
+
                 if authenticated_login and authenticated_login == expected_login:
-                    my_vote = find_existing_vote_by_login(cur, authenticated_login)
-                    user_obj = get_user_profile(cur, authenticated_login)
-                    if user_obj:
-                        profile = user_obj["profile"]
+                    if authenticated_login in ADMIN_ACCOUNTS:
+                        is_admin = True
+                        profile = {
+                            "phone": authenticated_login,
+                            "fullName": f"Администратор ({authenticated_login})",
+                            "group": "Оргкомитет / Администратор",
+                            "notBmstu": False,
+                            "supporterOf": "Администратор",
+                            "present": True,
+                            "isAdmin": True,
+                        }
+                        admin_users = list_all_users_for_admin(cur)
+                    else:
+                        my_vote = find_existing_vote_by_login(cur, authenticated_login)
+                        user_obj = get_user_profile(cur, authenticated_login)
+                        if user_obj:
+                            profile = user_obj["profile"]
 
             total = sum(counts.values())
             self._send_json(
                 200,
                 {
-                    "counts": counts if my_vote else None,
+                    "counts": counts if (my_vote or is_admin) else None,
                     "my_vote": my_vote,
                     "total": total,
                     "login": authenticated_login,
+                    "is_admin": is_admin,
                     "profile": profile,
+                    "users": admin_users,
                 },
             )
             return
@@ -638,11 +714,11 @@ class ProforgHandler(SimpleHTTPRequestHandler):
 
         client_ip = self.client_address[0]
 
-        # Проверка всех текстовых полей тела запроса через WAF-фильтр SQL-инъекций
         if detect_sql_injection(
             data.get("action"),
             data.get("phone"),
             data.get("login"),
+            data.get("target_login"),
             data.get("fullName"),
             data.get("group"),
             data.get("supporterOf"),
@@ -658,7 +734,7 @@ class ProforgHandler(SimpleHTTPRequestHandler):
 
         action = str(data.get("action") or "vote").strip()
 
-        # 1. РЕГИСТРАЦИЯ В ЛИЧНОМ КАБИНЕТЕ
+        # 1. РЕГИСТРАЦИЯ В ЛИЧНОМ КАБИНЕТЕ (ТОЛЬКО ДЛЯ УЧАСТНИКОВ/ЗРИТЕЛЕЙ, НЕ ДЛЯ АДМИНОВ)
         if action == "register":
             reg_rl_key = f"reg:{client_ip}"
             if is_rate_limited(reg_rl_key, max_attempts=8, window_sec=300):
@@ -669,6 +745,10 @@ class ProforgHandler(SimpleHTTPRequestHandler):
                 return
 
             raw_phone = str(data.get("phone") or data.get("login") or "").strip()[:64]
+            if raw_phone.lower() in ADMIN_ACCOUNTS:
+                self._send_json(400, {"ok": False, "error": "Регистрация аккаунтов администраторов запрещена."})
+                return
+
             phone = normalize_phone(raw_phone)
             full_name = sanitize_text(data.get("fullName"), 140)
             not_bmstu = bool(data.get("notBmstu"))
@@ -729,8 +809,8 @@ class ProforgHandler(SimpleHTTPRequestHandler):
 
                 cur.execute(
                     """
-                    INSERT INTO users (login, password_hash, full_name, study_group, not_bmstu, supporter_of, created_at)
-                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                    INSERT INTO users (login, password_hash, full_name, study_group, not_bmstu, supporter_of, present, verified_by, created_at)
+                    VALUES (?, ?, ?, ?, ?, ?, 0, '', ?)
                     """,
                     (
                         phone.lower(),
@@ -752,6 +832,7 @@ class ProforgHandler(SimpleHTTPRequestHandler):
                 {
                     "ok": True,
                     "login": phone.lower(),
+                    "is_admin": False,
                     "token": token,
                     "profile": {
                         "phone": phone,
@@ -759,6 +840,8 @@ class ProforgHandler(SimpleHTTPRequestHandler):
                         "group": study_group,
                         "notBmstu": not_bmstu,
                         "supporterOf": supporter_of,
+                        "present": False,
+                        "verifiedBy": "",
                     },
                     "my_vote": None,
                     "counts": None,
@@ -768,7 +851,7 @@ class ProforgHandler(SimpleHTTPRequestHandler):
             )
             return
 
-        # 2. АВТОРИЗАЦИЯ В ЛИЧНОМ КАБИНЕТЕ
+        # 2. АВТОРИЗАЦИЯ В ЛИЧНОМ КАБИНЕТЕ (ЗРИТЕЛЬ ИЛИ АДМИНИСТРАТОР)
         if action == "login":
             raw_login = str(data.get("login") or data.get("phone") or "").strip()[:64]
             norm_phone = normalize_phone(raw_login)
@@ -790,10 +873,54 @@ class ProforgHandler(SimpleHTTPRequestHandler):
                 record_attempt(rl_key)
                 self._send_json(
                     401,
-                    {"ok": False, "error": "Неверный номер телефона или пароль"},
+                    {"ok": False, "error": "Неверный логин (номер телефона) или пароль"},
                 )
                 return
 
+            # Проверка входа для 6 фиксированных аккаунтов администраторов
+            if login_key in ADMIN_ACCOUNTS:
+                if not verify_password_hash(password, ADMIN_ACCOUNTS[login_key]):
+                    record_attempt(rl_key)
+                    self._send_json(
+                        401,
+                        {"ok": False, "error": "Неверный логин администратора или пароль"},
+                    )
+                    return
+
+                reset_rate_limit(rl_key)
+                token = create_token(login_key)
+                with DB_LOCK, open_db() as conn:
+                    cur = conn.cursor()
+                    counts = get_all_counts(cur, use_cache=True)
+                    total = sum(counts.values())
+                    admin_users = list_all_users_for_admin(cur)
+
+                self._send_json(
+                    200,
+                    {
+                        "ok": True,
+                        "login": login_key,
+                        "is_admin": True,
+                        "token": token,
+                        "profile": {
+                            "phone": login_key,
+                            "fullName": f"Администратор ({login_key})",
+                            "group": "Оргкомитет / Администратор",
+                            "notBmstu": False,
+                            "supporterOf": "Администратор",
+                            "present": True,
+                            "isAdmin": True,
+                        },
+                        "users": admin_users,
+                        "my_vote": None,
+                        "counts": counts,
+                        "total": total,
+                        "cabinet_notice": CABINET_NOTICE,
+                    },
+                )
+                return
+
+            # Обычный вход зрителя по номеру телефона
             with DB_LOCK, open_db() as conn:
                 cur = conn.cursor()
                 user_obj = verify_user(cur, login_key, password)
@@ -817,6 +944,7 @@ class ProforgHandler(SimpleHTTPRequestHandler):
                 {
                     "ok": True,
                     "login": canonical_login,
+                    "is_admin": False,
                     "token": token,
                     "profile": user_obj["profile"],
                     "my_vote": my_vote,
@@ -827,7 +955,63 @@ class ProforgHandler(SimpleHTTPRequestHandler):
             )
             return
 
-        # 3. ГОЛОСОВАНИЕ
+        # 3. АДМИН-ПАНЕЛЬ: СПИСОК ПОЛЬЗОВАТЕЛЕЙ И ПОДТВЕРЖДЕНИЕ ПРИСУТСТВИЯ
+        if action in ("admin_list", "admin_set_presence"):
+            token = str(data.get("token") or "").strip()[:256]
+            authenticated_login = verify_token(token)
+            if not authenticated_login or authenticated_login not in ADMIN_ACCOUNTS:
+                self._send_json(
+                    403,
+                    {"ok": False, "error": "Доступ разрешён только авторизованным администраторам"},
+                )
+                return
+
+            with DB_LOCK, open_db() as conn:
+                cur = conn.cursor()
+                if action == "admin_set_presence":
+                    raw_target = str(data.get("target_login") or "").strip()[:64]
+                    norm_target = normalize_phone(raw_target)
+                    target_login = (norm_target or raw_target).lower()
+                    present_val = 1 if bool(data.get("present")) else 0
+
+                    if not target_login or not SAFE_LOGIN_RE.match(target_login):
+                        self._send_json(400, {"ok": False, "error": "Некорректный логин пользователя"})
+                        return
+
+                    cur.execute(
+                        """
+                        UPDATE users
+                        SET present = ?, verified_by = ?
+                        WHERE login = ?
+                        """,
+                        (
+                            present_val,
+                            authenticated_login if present_val else "",
+                            target_login,
+                        ),
+                    )
+                    if cur.rowcount == 0:
+                        self._send_json(404, {"ok": False, "error": "Пользователь не найден"})
+                        return
+                    conn.commit()
+
+                admin_users = list_all_users_for_admin(cur)
+                counts = get_all_counts(cur, use_cache=True)
+
+            self._send_json(
+                200,
+                {
+                    "ok": True,
+                    "is_admin": True,
+                    "login": authenticated_login,
+                    "users": admin_users,
+                    "counts": counts,
+                    "total": sum(counts.values()),
+                },
+            )
+            return
+
+        # 4. ГОЛОСОВАНИЕ (ТОЛЬКО ПРИ НАЛИЧИИ РЕГИСТРАЦИИ И ПОДТВЕРЖДЕНИЯ ПРИСУТСТВИЯ ОТ АДМИНА)
         if action == "vote":
             vote_rl_key = f"vote:{client_ip}"
             if check_and_record_rate(vote_rl_key, max_attempts=12, window_sec=60):
@@ -853,6 +1037,13 @@ class ProforgHandler(SimpleHTTPRequestHandler):
                 )
                 return
 
+            if authenticated_login in ADMIN_ACCOUNTS:
+                self._send_json(
+                    403,
+                    {"ok": False, "error": "Аккаунты администраторов предназначены для подтверждения присутствия и не участвуют в голосовании."},
+                )
+                return
+
             candidate_id = str(data.get("id") or "").strip()
             if candidate_id not in VALID_IDS:
                 self._send_json(400, {"ok": False, "error": "Некорректный кандидат"})
@@ -860,6 +1051,17 @@ class ProforgHandler(SimpleHTTPRequestHandler):
 
             with DB_LOCK, open_db() as conn:
                 cur = conn.cursor()
+                user_obj = get_user_profile(cur, authenticated_login)
+                if not user_obj or not user_obj["profile"].get("present"):
+                    self._send_json(
+                        403,
+                        {
+                            "ok": False,
+                            "error": "Право на голосование открывается только после подтверждения вашего присутствия администратором в БЗДК.",
+                        },
+                    )
+                    return
+
                 existing_vote = find_existing_vote_by_login(cur, authenticated_login)
                 if existing_vote:
                     counts = get_all_counts(cur, use_cache=True)
@@ -909,7 +1111,6 @@ class ProforgHandler(SimpleHTTPRequestHandler):
                     return
 
                 my_vote = candidate_id
-                # Сбрасываем кэш счётчиков после нового голоса
                 counts = get_all_counts(cur, use_cache=False)
                 total = sum(counts.values())
 

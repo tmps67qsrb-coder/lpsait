@@ -17,6 +17,22 @@ const PBKDF2_ITERATIONS = 100000;
 const MAX_BODY_BYTES = 4096;
 const MAX_TRACKED_KEYS = 5000;
 
+// 6 фиксированных аккаунтов администраторов (без возможности регистрации новых админов)
+const ADMIN_ACCOUNTS = {
+  admin1:
+    "pbkdf2$100000$4db9e2f225847f883c894a966ac4a0c5$7e209fb9a8f177efeb51db9a6522f2152f432fc2a5569a00ebbc10ef7feb8ac8",
+  admin2:
+    "pbkdf2$100000$d814c41b90647a6f84b7c69e67f7f2d0$0f36939d2d296036c0649076e052c71eea79913a563dc8bdf8d5f69388ddca9e",
+  admin3:
+    "pbkdf2$100000$d57aa932d631aadebe2a95eff487ed57$4a535914707c641cbb2209d7590a7857f539d852cb7e183706781ec175c99ee0",
+  admin4:
+    "pbkdf2$100000$353d65a24ce027f8726388017dfbac7a$17860788cc28d6ebae58e4294d508bc50310982a0b974ce16652dd759322d7a1",
+  admin5:
+    "pbkdf2$100000$ac4b4d3def91f2890392f3c25094198a$c32225d0190618a7184809a05d1bd09450e634df5ae85f93bf65741b0b19593a",
+  admin6:
+    "pbkdf2$100000$900e239b6b7778e8a3f741dac75f547a$05c9ee2e34cfc1bd1699ddbcefba9e6031161d20952c2d0873607ff5149fb8f2",
+};
+
 const VALID_SUPPORTERS = new Set([
   "Гузько Никита Андреевич",
   "Аксенова Алевтина Александровна",
@@ -51,11 +67,9 @@ function jsonResponse(payload, status = 200, extraHeaders = {}) {
 const FAILED_ATTEMPTS = new Map();
 const BANNED_IPS = new Map();
 
-// Короткоживущий кэш состояния голосования (защита хранилища от DDoS чтением)
 let STATE_CACHE = { ts: 0, state: null };
 const STATE_CACHE_TTL_MS = 1500;
 
-// Регулярное выражение WAF для обнаружения попыток SQL-инъекций и NoSQL/Key-инъекций
 const SQLI_PATTERN =
   /(\b(union\s+all\s+select|union\s+select|select\s+.+\s+from|insert\s+into|update\s+.+\s+set|delete\s+from|drop\s+table|alter\s+table|truncate\s+table|sqlite_master|sqlite_temp_master|information_schema|sleep\s*\(|benchmark\s*\(|waitfor\s+delay|load_file\s*\(|into\s+outfile|attach\s+database|pragma\s+)\b|('|")\s*(or|and)\s*('|"|\d)|\b(or|and)\s+1\s*=\s*1\b|--\s|--$|\/\*|\*\/|;\s*(select|drop|insert|update|delete))/i;
 
@@ -153,6 +167,9 @@ function sanitizeText(str, maxLen = 140) {
 
 function normalizePhone(raw) {
   const str = String(raw || "").trim();
+  if (Object.prototype.hasOwnProperty.call(ADMIN_ACCOUNTS, str.toLowerCase())) {
+    return "";
+  }
   const digits = str.replace(/\D/g, "");
   if (digits.length === 11 && (digits.startsWith("8") || digits.startsWith("7"))) {
     return "+7" + digits.slice(1);
@@ -186,7 +203,6 @@ function validatePasswordFormat(password) {
   return null;
 }
 
-// Надёжное хэширование пароля: PBKDF2-HMAC-SHA256 с индивидуальной солью
 function createPasswordHash(password) {
   const salt = crypto.randomBytes(16).toString("hex");
   const derived = crypto
@@ -221,7 +237,6 @@ function verifyPasswordHash(password, storedHash) {
     }
   }
 
-  // Обратная совместимость со старыми SHA-256 хэшами
   const legacySha = crypto.createHash("sha256").update(pwd).digest("hex");
   try {
     return crypto.timingSafeEqual(
@@ -233,7 +248,6 @@ function verifyPasswordHash(password, storedHash) {
   }
 }
 
-// Шифрование персональных данных (AES-256-GCM) при хранении
 function encryptField(plainText) {
   const text = String(plainText || "");
   if (!text) return "";
@@ -262,7 +276,7 @@ function decryptField(value) {
 }
 
 function createToken(login) {
-  const expiry = Math.floor(Date.now() / 1000) + 86400 * 7; // 7 дней
+  const expiry = Math.floor(Date.now() / 1000) + 86400 * 7;
   const data = `${login}:${expiry}`;
   const sig = crypto.createHmac("sha256", SECRET_KEY).update(data).digest("hex");
   return `${login}.${expiry}.${sig}`;
@@ -285,7 +299,7 @@ function verifyToken(token) {
   } catch {
     return null;
   }
-  return login;
+  return login.toLowerCase();
 }
 
 async function getCachedState(store, forceFresh = false) {
@@ -305,7 +319,6 @@ async function findUserAccount(store, rawLogin) {
   const lookupKey = (normPhone || String(rawLogin || "").trim()).toLowerCase();
   if (!lookupKey || !SAFE_LOGIN_RE.test(lookupKey)) return null;
 
-  // 1. Ищем в индивидуальном ключе Blobs
   const blobUser = await store.get(`user:${lookupKey}`, { type: "json" });
   if (blobUser) {
     return {
@@ -313,10 +326,11 @@ async function findUserAccount(store, rawLogin) {
       fullName: decryptField(blobUser.fullName),
       group: decryptField(blobUser.group),
       supporterOf: decryptField(blobUser.supporterOf),
+      present: Boolean(blobUser.present),
+      verifiedBy: String(blobUser.verifiedBy || ""),
     };
   }
 
-  // 2. Ищем в дефолтном users.json
   const dbUsers = (await store.get("users", { type: "json" })) || defaultUsers;
   if (Array.isArray(dbUsers)) {
     const found = dbUsers.find(
@@ -330,11 +344,65 @@ async function findUserAccount(store, rawLogin) {
         group: found.group || "МГТУ им. Н.Э. Баумана",
         notBmstu: Boolean(found.notBmstu),
         supporterOf: found.supporterOf || "Просто зритель",
+        present: Boolean(found.present),
+        verifiedBy: String(found.verifiedBy || ""),
         password_sha256: found.password_sha256,
       };
     }
   }
   return null;
+}
+
+async function listAllUsersForAdmin(store) {
+  const loginsSet = new Set();
+  const indexList = (await store.get("user_index", { type: "json" })) || [];
+  if (Array.isArray(indexList)) {
+    for (const lg of indexList) {
+      if (lg && typeof lg === "string") loginsSet.add(lg.toLowerCase());
+    }
+  }
+
+  try {
+    if (typeof store.list === "function") {
+      const listed = await store.list({ prefix: "user:" });
+      if (listed && Array.isArray(listed.blobs)) {
+        for (const b of listed.blobs) {
+          if (b && typeof b.key === "string" && b.key.startsWith("user:")) {
+            loginsSet.add(b.key.slice(5).toLowerCase());
+          }
+        }
+      }
+    }
+  } catch {
+    // fallback to user_index
+  }
+
+  const users = [];
+  for (const lg of loginsSet) {
+    if (Object.prototype.hasOwnProperty.call(ADMIN_ACCOUNTS, lg)) continue;
+    const u = await store.get(`user:${lg}`, { type: "json" });
+    if (!u) continue;
+    const voterData = await store.get(`voter:${lg}`, { type: "json" });
+    const notBmstu = Boolean(u.notBmstu);
+    const decName = decryptField(u.fullName) || lg;
+    const decGroup = decryptField(u.group) || "";
+    const decSupporter = decryptField(u.supporterOf) || "Просто зритель";
+    users.push({
+      login: u.login || lg,
+      phone: u.phone || u.login || lg,
+      fullName: decName,
+      group: notBmstu ? "Не из МГТУ им. Н.Э. Баумана" : decGroup,
+      notBmstu,
+      supporterOf: decSupporter,
+      present: Boolean(u.present),
+      verifiedBy: String(u.verifiedBy || ""),
+      hasVoted: Boolean(voterData && voterData.candidateId),
+      createdAt: Number(u.createdAt || 0),
+    });
+  }
+
+  users.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+  return users;
 }
 
 function formatPublicProfile(userObj) {
@@ -345,13 +413,14 @@ function formatPublicProfile(userObj) {
     group: userObj.notBmstu ? "Не из МГТУ им. Н.Э. Баумана" : userObj.group || "",
     notBmstu: Boolean(userObj.notBmstu),
     supporterOf: userObj.supporterOf || "",
+    present: Boolean(userObj.present),
+    verifiedBy: String(userObj.verifiedBy || ""),
   };
 }
 
 export default async (req) => {
   const clientIp = getClientIp(req);
 
-  // 0. ПРОВЕРКА АВТО-БАНА IP И ГЛОБАЛЬНОГО АНТИ-DDOS ЛИМИТА
   const bannedLeft = isIpBanned(clientIp);
   if (bannedLeft > 0) {
     return jsonResponse(
@@ -373,7 +442,7 @@ export default async (req) => {
     );
   }
 
-  if (checkAndRecordRate(`api:${clientIp}`, 40, 60000)) {
+  if (checkAndRecordRate(`api:${clientIp}`, 50, 60000)) {
     return jsonResponse(
       { ok: false, error: "Превышен лимит обращений к серверу. Подождите минуту." },
       429,
@@ -413,6 +482,7 @@ export default async (req) => {
         body.action,
         body.phone,
         body.login,
+        body.target_login,
         body.fullName,
         body.group,
         body.supporterOf,
@@ -429,7 +499,7 @@ export default async (req) => {
 
     const action = String(body.action || "vote").trim();
 
-    // 1. РЕГИСТРАЦИЯ В ЛИЧНОМ КАБИНЕТЕ
+    // 1. РЕГИСТРАЦИЯ В ЛИЧНОМ КАБИНЕТЕ (ТОЛЬКО ДЛЯ УЧАСТНИКОВ/ЗРИТЕЛЕЙ, НЕ ДЛЯ АДМИНОВ)
     if (action === "register") {
       const regRlKey = `reg:${clientIp}`;
       if (isRateLimited(regRlKey, 8, 300000)) {
@@ -440,6 +510,13 @@ export default async (req) => {
       }
 
       const rawPhone = String(body.phone || body.login || "").trim().slice(0, 64);
+      if (Object.prototype.hasOwnProperty.call(ADMIN_ACCOUNTS, rawPhone.toLowerCase())) {
+        return jsonResponse(
+          { ok: false, error: "Регистрация аккаунтов администраторов запрещена." },
+          400
+        );
+      }
+
       const phone = normalizePhone(rawPhone);
       const fullName = sanitizeText(body.fullName, 140);
       const notBmstu = Boolean(body.notBmstu);
@@ -490,7 +567,6 @@ export default async (req) => {
 
       recordAttempt(regRlKey);
 
-      // Персональные данные шифруются AES-256-GCM, пароль хэшируется PBKDF2 с солью
       const storedRecord = {
         login: phone,
         phone,
@@ -498,11 +574,19 @@ export default async (req) => {
         group: encryptField(group),
         notBmstu,
         supporterOf: encryptField(supporterOf),
+        present: false,
+        verifiedBy: "",
         password_sha256: createPasswordHash(password),
         createdAt: Date.now(),
       };
 
       await store.setJSON(`user:${phone}`, storedRecord);
+
+      const indexList = (await store.get("user_index", { type: "json" })) || [];
+      if (Array.isArray(indexList) && !indexList.includes(phone)) {
+        indexList.push(phone);
+        await store.setJSON("user_index", indexList);
+      }
 
       const token = createToken(phone);
       const state = await getCachedState(store);
@@ -511,6 +595,7 @@ export default async (req) => {
       return jsonResponse({
         ok: true,
         login: phone,
+        is_admin: false,
         token,
         profile: {
           phone,
@@ -518,6 +603,8 @@ export default async (req) => {
           group,
           notBmstu,
           supporterOf,
+          present: false,
+          verifiedBy: "",
         },
         my_vote: null,
         counts: null,
@@ -526,7 +613,7 @@ export default async (req) => {
       });
     }
 
-    // 2. ВХОД В ЛИЧНЫЙ КАБИНЕТ
+    // 2. ВХОД В ЛИЧНЫЙ КАБИНЕТ (ЗРИТЕЛЬ ИЛИ АДМИНИСТРАТОР)
     if (action === "login") {
       const rawLogin = String(body.login || body.phone || "").trim().slice(0, 64);
       const normPhone = normalizePhone(rawLogin);
@@ -543,7 +630,42 @@ export default async (req) => {
 
       if (!SAFE_LOGIN_RE.test(loginKey)) {
         recordAttempt(rlKey);
-        return jsonResponse({ ok: false, error: "Неверный номер телефона или пароль" }, 401);
+        return jsonResponse({ ok: false, error: "Неверный логин (номер телефона) или пароль" }, 401);
+      }
+
+      // Вход для 6 фиксированных аккаунтов администраторов
+      if (Object.prototype.hasOwnProperty.call(ADMIN_ACCOUNTS, loginKey)) {
+        if (!verifyPasswordHash(password, ADMIN_ACCOUNTS[loginKey])) {
+          recordAttempt(rlKey);
+          return jsonResponse({ ok: false, error: "Неверный логин администратора или пароль" }, 401);
+        }
+
+        resetRateLimit(rlKey);
+        const token = createToken(loginKey);
+        const state = await getCachedState(store);
+        const total = Object.values(state.counts).reduce((a, b) => a + b, 0);
+        const adminUsers = await listAllUsersForAdmin(store);
+
+        return jsonResponse({
+          ok: true,
+          login: loginKey,
+          is_admin: true,
+          token,
+          profile: {
+            phone: loginKey,
+            fullName: `Администратор (${loginKey})`,
+            group: "Оргкомитет / Администратор",
+            notBmstu: false,
+            supporterOf: "Администратор",
+            present: true,
+            isAdmin: true,
+          },
+          users: adminUsers,
+          my_vote: null,
+          counts: state.counts,
+          total,
+          cabinet_notice: "В личном кабинете скоро появятся лист рассадки и данные о входе в БЗДК",
+        });
       }
 
       const userAccount = await findUserAccount(store, rawLogin);
@@ -573,6 +695,7 @@ export default async (req) => {
       return jsonResponse({
         ok: true,
         login: canonicalLogin,
+        is_admin: false,
         token,
         profile: formatPublicProfile(userAccount),
         my_vote: myVote,
@@ -582,7 +705,55 @@ export default async (req) => {
       });
     }
 
-    // 3. ГОЛОСОВАНИЕ
+    // 3. АДМИН-ПАНЕЛЬ: СПИСОК ПОЛЬЗОВАТЕЛЕЙ И ПОДТВЕРЖДЕНИЕ ПРИСУТСТВИЯ
+    if (action === "admin_list" || action === "admin_set_presence") {
+      const token = String(body.token || "").trim().slice(0, 256);
+      const authenticatedLogin = verifyToken(token);
+      if (
+        !authenticatedLogin ||
+        !Object.prototype.hasOwnProperty.call(ADMIN_ACCOUNTS, authenticatedLogin)
+      ) {
+        return jsonResponse(
+          { ok: false, error: "Доступ разрешён только авторизованным администраторам" },
+          403
+        );
+      }
+
+      if (action === "admin_set_presence") {
+        const rawTarget = String(body.target_login || "").trim().slice(0, 64);
+        const normTarget = normalizePhone(rawTarget);
+        const targetLogin = (normTarget || rawTarget).toLowerCase();
+        const presentVal = Boolean(body.present);
+
+        if (!targetLogin || !SAFE_LOGIN_RE.test(targetLogin)) {
+          return jsonResponse({ ok: false, error: "Некорректный логин пользователя" }, 400);
+        }
+
+        const existingRecord = await store.get(`user:${targetLogin}`, { type: "json" });
+        if (!existingRecord) {
+          return jsonResponse({ ok: false, error: "Пользователь не найден" }, 404);
+        }
+
+        existingRecord.present = presentVal;
+        existingRecord.verifiedBy = presentVal ? authenticatedLogin : "";
+        await store.setJSON(`user:${targetLogin}`, existingRecord);
+      }
+
+      const adminUsers = await listAllUsersForAdmin(store);
+      const state = await getCachedState(store);
+      const total = Object.values(state.counts).reduce((a, b) => a + b, 0);
+
+      return jsonResponse({
+        ok: true,
+        is_admin: true,
+        login: authenticatedLogin,
+        users: adminUsers,
+        counts: state.counts,
+        total,
+      });
+    }
+
+    // 4. ГОЛОСОВАНИЕ (ТОЛЬКО ПРИ НАЛИЧИИ РЕГИСТРАЦИИ И ПОДТВЕРЖДЕНИЯ ПРИСУТСТВИЯ ОТ АДМИНА)
     if (action === "vote") {
       if (checkAndRecordRate(`vote:${clientIp}`, 12, 60000)) {
         return jsonResponse(
@@ -604,11 +775,32 @@ export default async (req) => {
         );
       }
 
+      if (Object.prototype.hasOwnProperty.call(ADMIN_ACCOUNTS, authenticatedLogin)) {
+        return jsonResponse(
+          {
+            ok: false,
+            error: "Аккаунты администраторов предназначены для подтверждения присутствия и не участвуют в голосовании.",
+          },
+          403
+        );
+      }
+
       const candidateId = String(body.id || "").trim();
       if (!VALID_IDS.has(candidateId)) {
         return jsonResponse(
           { ok: false, error: "Некорректный кандидат" },
           400
+        );
+      }
+
+      const userAccount = await findUserAccount(store, authenticatedLogin);
+      if (!userAccount || !userAccount.present) {
+        return jsonResponse(
+          {
+            ok: false,
+            error: "Право на голосование открывается только после подтверждения вашего присутствия администратором в БЗДК.",
+          },
+          403
         );
       }
 
@@ -652,7 +844,7 @@ export default async (req) => {
     return jsonResponse({ ok: false, error: "Неизвестное действие" }, 400);
   }
 
-  // 4. ПОЛУЧЕНИЕ СОСТОЯНИЯ И ПРОФИЛЯ (GET)
+  // 5. ПОЛУЧЕНИЕ СОСТОЯНИЯ И ПРОФИЛЯ (GET)
   const token = (url.searchParams.get("token") || "").trim().slice(0, 256);
   const rawLogin = (url.searchParams.get("login") || "").trim().slice(0, 64);
   if (detectSqlInjection(token, rawLogin)) {
@@ -668,20 +860,39 @@ export default async (req) => {
 
   let myVote = null;
   let profile = null;
+  let isAdmin = false;
+  let adminUsers = null;
+
   if (authenticatedLogin && authenticatedLogin.toLowerCase() === expectedLogin.toLowerCase()) {
-    const voterData = await store.get(`voter:${authenticatedLogin}`, { type: "json" });
-    myVote = voterData ? voterData.candidateId : null;
-    const userAccount = await findUserAccount(store, authenticatedLogin);
-    profile = formatPublicProfile(userAccount);
+    if (Object.prototype.hasOwnProperty.call(ADMIN_ACCOUNTS, authenticatedLogin)) {
+      isAdmin = true;
+      profile = {
+        phone: authenticatedLogin,
+        fullName: `Администратор (${authenticatedLogin})`,
+        group: "Оргкомитет / Администратор",
+        notBmstu: false,
+        supporterOf: "Администратор",
+        present: true,
+        isAdmin: true,
+      };
+      adminUsers = await listAllUsersForAdmin(store);
+    } else {
+      const voterData = await store.get(`voter:${authenticatedLogin}`, { type: "json" });
+      myVote = voterData ? voterData.candidateId : null;
+      const userAccount = await findUserAccount(store, authenticatedLogin);
+      profile = formatPublicProfile(userAccount);
+    }
   }
 
   const total = Object.values(state.counts).reduce((a, b) => a + b, 0);
 
   return jsonResponse({
-    counts: myVote ? state.counts : null,
+    counts: myVote || isAdmin ? state.counts : null,
     my_vote: myVote,
     total,
     login: authenticatedLogin || null,
+    is_admin: isAdmin,
     profile,
+    users: adminUsers,
   });
 };

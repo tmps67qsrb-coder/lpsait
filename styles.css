@@ -3943,3 +3943,325 @@ b { color: var(--cream); font-weight: 600; }
     padding: 26px 20px;
   }
 }
+
+/* ============================================================
+   ЛИЧНЫЙ КАБИНЕТ АДМИНИСТРАТОРА И ПЛАШКА ОЖИДАНИЯ ПРИСУТСТВИЯ
+   ============================================================ */
+.cabinet-admin[hidden],
+.vote-presence-wait[hidden] {
+  display: none !important;
+}
+
+.cabinet-modal__dialog--admin {
+  width: min(760px, 100%);
+}
+
+.vote-presence-wait {
+  margin-top: 16px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 18px 22px;
+  border-radius: 14px;
+  border: 1px solid rgba(251, 191, 36, 0.55);
+  background:
+    radial-gradient(90% 130% at 0% 0%, rgba(251, 191, 36, 0.16), transparent 65%),
+    linear-gradient(145deg, rgba(16, 30, 68, 0.92), rgba(6, 14, 36, 0.96));
+  box-shadow: 0 0 28px rgba(251, 191, 36, 0.16), inset 0 0 18px rgba(140, 224, 255, 0.08);
+  text-align: left;
+}
+.vote-presence-wait__icon {
+  flex: 0 0 auto;
+  color: #fcd34d;
+  filter: drop-shadow(0 0 10px rgba(251, 191, 36, 0.6));
+}
+.vote-presence-wait__body {
+  display: grid;
+  gap: 4px;
+}
+.vote-presence-wait__title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 17px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #fef3c7;
+}
+.vote-presence-wait__sub {
+  margin: 0;
+  font-size: 14.5px;
+  line-height: 1.5;
+  color: rgba(226, 238, 255, 0.88);
+}
+
+.cabinet-profile__val--ok {
+  color: #6ee7b7;
+  text-shadow: 0 0 12px rgba(110, 231, 183, 0.45);
+}
+.cabinet-profile__val--wait {
+  color: #fcd34d;
+}
+
+.cabinet-admin {
+  display: grid;
+  gap: 16px;
+  text-align: left;
+}
+.cabinet-admin__top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding-bottom: 12px;
+  border-bottom: 1px solid rgba(175, 220, 255, 0.2);
+}
+.cabinet-admin__badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  padding: 6px 14px;
+  border-radius: 999px;
+  border: 1px solid rgba(140, 224, 255, 0.5);
+  background: rgba(14, 38, 88, 0.75);
+  font-size: 14px;
+  color: #e6f4ff;
+}
+.cabinet-admin__dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: #6ee7b7;
+  box-shadow: 0 0 10px #6ee7b7;
+}
+.cabinet-admin__top-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.cabinet-admin__refresh {
+  cursor: pointer;
+  padding: 7px 14px;
+  border-radius: 8px;
+  border: 1px solid rgba(140, 224, 255, 0.45);
+  background: rgba(16, 42, 98, 0.72);
+  color: var(--accent);
+  font-size: 13.5px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  transition: all 0.2s ease;
+}
+.cabinet-admin__refresh:hover {
+  border-color: #ffffff;
+  color: #ffffff;
+  box-shadow: 0 0 14px rgba(140, 224, 255, 0.45);
+}
+
+.cabinet-admin__stats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+}
+.cabinet-admin__stat {
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px solid rgba(175, 220, 255, 0.24);
+  background: rgba(4, 11, 30, 0.76);
+  text-align: center;
+  display: grid;
+  gap: 2px;
+}
+.cabinet-admin__stat b {
+  font-size: 24px;
+  font-weight: 400;
+  color: #ffffff;
+  text-shadow: 0 0 14px rgba(140, 224, 255, 0.45);
+}
+.cabinet-admin__stat--ok b {
+  color: #6ee7b7;
+  text-shadow: 0 0 14px rgba(110, 231, 183, 0.45);
+}
+.cabinet-admin__stat--voted b {
+  color: var(--accent);
+}
+.cabinet-admin__stat span {
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: rgba(190, 212, 242, 0.76);
+}
+
+.cabinet-admin__controls {
+  display: grid;
+  gap: 10px;
+}
+.cabinet-admin__search {
+  width: 100%;
+  height: 44px;
+  padding: 0 16px;
+  border-radius: 10px;
+  border: 1px solid rgba(190, 220, 255, 0.36);
+  background: rgba(4, 10, 28, 0.88);
+  color: #ffffff;
+  font-size: 15px;
+  outline: none;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+.cabinet-admin__search:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 16px rgba(140, 224, 255, 0.32);
+}
+.cabinet-admin__filters {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.cabinet-admin__filter {
+  flex: 1 1 auto;
+  height: 36px;
+  padding: 0 12px;
+  border-radius: 8px;
+  border: 1px solid rgba(175, 220, 255, 0.24);
+  background: rgba(6, 15, 38, 0.72);
+  color: rgba(215, 232, 255, 0.75);
+  font-size: 13px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+.cabinet-admin__filter.is-active {
+  border-color: var(--accent);
+  background: rgba(37, 99, 235, 0.42);
+  color: #ffffff;
+  box-shadow: 0 0 14px rgba(140, 224, 255, 0.26);
+}
+
+.cabinet-admin__list {
+  display: grid;
+  gap: 10px;
+  max-height: 360px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+.cabinet-admin__empty {
+  padding: 28px 16px;
+  text-align: center;
+  font-size: 15px;
+  color: rgba(190, 212, 242, 0.72);
+  border-radius: 12px;
+  border: 1px dashed rgba(175, 220, 255, 0.24);
+}
+.admin-user-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 14px 16px;
+  border-radius: 12px;
+  border: 1px solid rgba(175, 220, 255, 0.24);
+  background: rgba(4, 11, 30, 0.82);
+  transition: border-color 0.2s ease, background 0.2s ease;
+}
+.admin-user-card.is-present {
+  border-color: rgba(110, 231, 183, 0.5);
+  background: linear-gradient(135deg, rgba(6, 38, 46, 0.65), rgba(4, 12, 32, 0.88));
+}
+.admin-user-card__info {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+.admin-user-card__name {
+  font-size: 16.5px;
+  color: #ffffff;
+  word-break: break-word;
+}
+.admin-user-card__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+  font-size: 13.5px;
+  color: rgba(195, 218, 248, 0.82);
+}
+.admin-user-card__badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 3px;
+}
+.admin-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 9px;
+  border-radius: 999px;
+  font-size: 11.5px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.admin-badge--wait {
+  border: 1px solid rgba(251, 191, 36, 0.45);
+  background: rgba(251, 191, 36, 0.12);
+  color: #fde68a;
+}
+.admin-badge--ok {
+  border: 1px solid rgba(110, 231, 183, 0.55);
+  background: rgba(16, 185, 129, 0.16);
+  color: #6ee7b7;
+}
+.admin-badge--voted {
+  border: 1px solid rgba(140, 224, 255, 0.55);
+  background: rgba(56, 189, 248, 0.16);
+  color: #bae6fd;
+}
+
+.admin-user-card__action {
+  flex: 0 0 auto;
+}
+.admin-presence-btn {
+  cursor: pointer;
+  padding: 9px 16px;
+  border-radius: 10px;
+  border: 1px solid rgba(110, 231, 183, 0.75);
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.82), rgba(5, 150, 105, 0.88));
+  color: #ffffff;
+  font-size: 13px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  box-shadow: 0 0 16px rgba(16, 185, 129, 0.32);
+  transition: all 0.2s ease;
+}
+.admin-presence-btn:hover:not(:disabled) {
+  transform: translateY(-1px);
+  border-color: #ffffff;
+  box-shadow: 0 0 22px rgba(110, 231, 183, 0.55);
+}
+.admin-presence-btn.is-revoke {
+  border-color: rgba(248, 113, 113, 0.55);
+  background: rgba(68, 20, 32, 0.75);
+  color: #fecaca;
+  box-shadow: none;
+}
+.admin-presence-btn.is-revoke:hover:not(:disabled) {
+  border-color: #fca5a5;
+  background: rgba(127, 29, 29, 0.85);
+  color: #ffffff;
+}
+.admin-presence-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+@media (max-width: 640px) {
+  .cabinet-admin__stats {
+    grid-template-columns: 1fr;
+  }
+  .admin-user-card {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .admin-presence-btn {
+    width: 100%;
+    text-align: center;
+  }
+}

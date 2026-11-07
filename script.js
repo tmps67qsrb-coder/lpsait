@@ -193,9 +193,37 @@ const cabProfileName = document.getElementById("cabProfileName");
 const cabProfilePhone = document.getElementById("cabProfilePhone");
 const cabProfileGroup = document.getElementById("cabProfileGroup");
 const cabProfileSupporter = document.getElementById("cabProfileSupporter");
+const cabProfilePresence = document.getElementById("cabProfilePresence");
 const cabProfileVote = document.getElementById("cabProfileVote");
 const cabGoVoteBtn = document.getElementById("cabGoVoteBtn");
 const cabLogoutBtn = document.getElementById("cabLogoutBtn");
+const votePresenceWaitBanner = document.getElementById("votePresenceWaitBanner");
+const voteUserSubNote = document.getElementById("voteUserSubNote");
+
+// Элементы Личного кабинета АДМИНИСТРАТОРА
+const cabinetAdminView = document.getElementById("cabinetAdminView");
+const adminLoginLabel = document.getElementById("adminLoginLabel");
+const adminRefreshBtn = document.getElementById("adminRefreshBtn");
+const adminLogoutBtn = document.getElementById("adminLogoutBtn");
+const adminStatTotal = document.getElementById("adminStatTotal");
+const adminStatPresent = document.getElementById("adminStatPresent");
+const adminStatVoted = document.getElementById("adminStatVoted");
+const adminSearchInput = document.getElementById("adminSearchInput");
+const adminUsersList = document.getElementById("adminUsersList");
+const adminErrorMsg = document.getElementById("adminErrorMsg");
+const adminFilterBtns = document.querySelectorAll("[data-admin-filter]");
+const cabinetDialogEl = cabinetModal ? cabinetModal.querySelector(".cabinet-modal__dialog") : null;
+const cabinetModalTitleEl = document.getElementById("cabinetModalTitle");
+
+// Локальные SHA-256 хэши 6 фиксированных админов (для резервного режима file://)
+const LOCAL_ADMIN_HASHES = {
+  admin1: "b6701ac6a1976aaa7a9381abfb32ead8e351faef504acd58c19cb47c3e4a9de3",
+  admin2: "1b404e55cf9a57db0eb7d86ccb3a4f23bcf9e33e5c076dba2d5e4a2ea6e2df39",
+  admin3: "dead97b5f06ec9b61a88641144d8435a58cd6d3df8c984e96aab3359dc6114f9",
+  admin4: "6d0388133cdfb203c77418b36ce16ad51e9f5976cb0c334fe979c44181bbc3bd",
+  admin5: "6befdeee7c073751983345a77de5b6e7f5f4a7f8500bbc69cc84e0fc4c851e7d",
+  admin6: "d4a0b7fee6e70bb531d58bb429a81635aecc560e16d022845d310615e8cfa2a1",
+};
 
 const readJSON = (key, fallback) => {
   try { return JSON.parse(localStorage.getItem(key)) ?? fallback; }
@@ -206,19 +234,34 @@ const writeJSON = (key, val) => {
   catch {}
 };
 
-let currentUser = readJSON(LS_AUTH, null); // { login, token, profile }
+let currentUser = readJSON(LS_AUTH, null); // { login, token, is_admin, profile }
 if (currentUser && (!currentUser.token || !currentUser.login)) {
   currentUser = null;
   try { localStorage.removeItem(LS_AUTH); } catch {}
 }
 let votingInProgress = false;
 let isNotBmstu = false;
+let adminUsersCache = [];
+let adminCurrentFilter = "all";
 
 const voteIsOpen = () => voteDemo || Date.now() >= VOTE_OPEN_AT;
 const isLoggedIn = () => Boolean(currentUser && currentUser.login && currentUser.token);
+const isAdminUser = () =>
+  Boolean(
+    isLoggedIn() &&
+      (currentUser.is_admin ||
+        (currentUser.profile && currentUser.profile.isAdmin) ||
+        Object.prototype.hasOwnProperty.call(LOCAL_ADMIN_HASHES, String(currentUser.login).toLowerCase()))
+  );
+const isUserPresent = () =>
+  Boolean(isLoggedIn() && !isAdminUser() && currentUser.profile && currentUser.profile.present);
 
 function normalizePhoneClient(raw) {
-  const digits = String(raw || "").replace(/\D/g, "");
+  const s = String(raw || "").trim();
+  if (Object.prototype.hasOwnProperty.call(LOCAL_ADMIN_HASHES, s.toLowerCase())) {
+    return "";
+  }
+  const digits = s.replace(/\D/g, "");
   if (digits.length === 11 && (digits.startsWith("8") || digits.startsWith("7"))) {
     return "+7" + digits.slice(1);
   }
@@ -318,6 +361,9 @@ function openCabinetModal(preferredTab) {
   if (!isLoggedIn() && preferredTab) {
     switchCabinetTab(preferredTab);
   }
+  if (isAdminUser()) {
+    fetchAdminUsers();
+  }
   cabinetModal.hidden = false;
   cabinetModal.setAttribute("aria-hidden", "false");
   document.body.style.overflow = "hidden";
@@ -378,6 +424,8 @@ const displayName = (f, i) => [f.name, f.surname].filter(Boolean).join(" ").trim
 
 function updateAuthUI() {
   const loggedIn = isLoggedIn();
+  const adminMode = isAdminUser();
+  const presentOk = isUserPresent();
   const prof = (currentUser && currentUser.profile) || {};
   const displayUser = prof.fullName || (currentUser && currentUser.login) || "";
 
@@ -386,14 +434,39 @@ function updateAuthUI() {
   if (voteUserName && loggedIn) voteUserName.textContent = displayUser;
   if (voteAuthError) voteAuthError.hidden = true;
 
+  if (voteOpenCabinetBtn) {
+    voteOpenCabinetBtn.textContent = adminMode ? "Панель админа" : "Профиль";
+  }
+  if (voteUserSubNote) {
+    voteUserSubNote.textContent = adminMode
+      ? "Панель администратора: подтверждение присутствия участников и допуск к голосованию"
+      : "В личном кабинете скоро появятся лист рассадки и данные о входе в БЗДК";
+  }
+
+  // Плашка ожидания подтверждения присутствия от админа (показывается зарегистрированному зрителю, пока админ его не отметил)
+  if (votePresenceWaitBanner) {
+    votePresenceWaitBanner.hidden = !(loggedIn && !adminMode && !presentOk);
+  }
+
   if (headerCabinetLabel) {
-    headerCabinetLabel.textContent = "Личный кабинет";
+    headerCabinetLabel.textContent = adminMode ? "ЛК Админа" : "Личный кабинет";
+  }
+
+  if (cabinetDialogEl) {
+    cabinetDialogEl.classList.toggle("cabinet-modal__dialog--admin", adminMode);
+  }
+  if (cabinetModalTitleEl) {
+    cabinetModalTitleEl.textContent = adminMode ? "Личный кабинет администратора" : "Личный кабинет";
   }
 
   if (cabinetGuestView) cabinetGuestView.hidden = loggedIn;
-  if (cabinetProfileView) cabinetProfileView.hidden = !loggedIn;
+  if (cabinetProfileView) cabinetProfileView.hidden = !(loggedIn && !adminMode);
+  if (cabinetAdminView) cabinetAdminView.hidden = !(loggedIn && adminMode);
 
-  if (loggedIn) {
+  if (loggedIn && adminMode) {
+    if (adminLoginLabel) adminLoginLabel.textContent = currentUser.login;
+    renderAdminPanel();
+  } else if (loggedIn) {
     if (cabProfileName) cabProfileName.textContent = prof.fullName || currentUser.login;
     if (cabProfilePhone) cabProfilePhone.textContent = prof.phone || currentUser.login;
     if (cabProfileGroup) {
@@ -402,6 +475,13 @@ function updateAuthUI() {
         : prof.group || "МГТУ им. Н.Э. Баумана";
     }
     if (cabProfileSupporter) cabProfileSupporter.textContent = prof.supporterOf || "Просто зритель";
+    if (cabProfilePresence) {
+      cabProfilePresence.textContent = presentOk
+        ? "Подтверждено администратором (доступ открыт)"
+        : "Ожидает подтверждения от администратора в БЗДК";
+      cabProfilePresence.classList.toggle("cabinet-profile__val--ok", presentOk);
+      cabProfilePresence.classList.toggle("cabinet-profile__val--wait", !presentOk);
+    }
     if (cabProfileVote) {
       const my = myVote();
       if (my && my.id) {
@@ -409,6 +489,8 @@ function updateAuthUI() {
         cabProfileVote.textContent = chosenFin
           ? `Голос отдан: ${chosenFin.name}`
           : "Голос учтён";
+      } else if (!presentOk) {
+        cabProfileVote.textContent = "Откроется после подтверждения присутствия админом";
       } else if (voteIsOpen()) {
         cabProfileVote.textContent = "Голосование открыто — выберите кандидата";
       } else {
@@ -417,9 +499,9 @@ function updateAuthUI() {
     }
   }
 
-  // Без обязательной регистрации и входа карточки голосования не открываются
+  // Право на голосование даёт ТОЛЬКО регистрация + подтверждение присутствия от администратора
   if (voteGrid) {
-    voteGrid.hidden = !(voteIsOpen() && loggedIn);
+    voteGrid.hidden = !(voteIsOpen() && loggedIn && !adminMode && presentOk);
   }
 }
 
@@ -441,8 +523,216 @@ function showLoginError(msg) {
   loginErrorMsg.hidden = !msg;
 }
 
+function showAdminError(msg) {
+  if (!adminErrorMsg) return;
+  adminErrorMsg.textContent = msg;
+  adminErrorMsg.hidden = !msg;
+}
+
+function escapeHtml(str) {
+  return String(str || "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+function renderAdminPanel() {
+  if (!adminUsersList) return;
+  const users = Array.isArray(adminUsersCache) ? adminUsersCache : [];
+
+  const totalCount = users.length;
+  const presentCount = users.filter((u) => u.present).length;
+  const votedCount = users.filter((u) => u.hasVoted).length;
+
+  if (adminStatTotal) adminStatTotal.textContent = String(totalCount);
+  if (adminStatPresent) adminStatPresent.textContent = String(presentCount);
+  if (adminStatVoted) adminStatVoted.textContent = String(votedCount);
+
+  const query = ((adminSearchInput && adminSearchInput.value) || "").trim().toLowerCase();
+  const filtered = users.filter((u) => {
+    if (adminCurrentFilter === "pending" && u.present) return false;
+    if (adminCurrentFilter === "present" && !u.present) return false;
+    if (!query) return true;
+    const hay = [u.fullName, u.phone, u.login, u.group, u.supporterOf]
+      .filter(Boolean)
+      .join(" ")
+      .toLowerCase();
+    return hay.includes(query);
+  });
+
+  if (!filtered.length) {
+    adminUsersList.innerHTML = `<p class="cabinet-admin__empty">${
+      totalCount === 0
+        ? "Пока нет зарегистрированных пользователей."
+        : "По вашему запросу участники не найдены."
+    }</p>`;
+    return;
+  }
+
+  adminUsersList.innerHTML = filtered
+    .map((u) => {
+      const present = Boolean(u.present);
+      const voted = Boolean(u.hasVoted);
+      const statusBadge = present
+        ? `<span class="admin-badge admin-badge--ok">Присутствие подтверждено${
+            u.verifiedBy ? " (" + escapeHtml(u.verifiedBy) + ")" : ""
+          }</span>`
+        : `<span class="admin-badge admin-badge--wait">Ожидает подтверждения</span>`;
+      const votedBadge = voted
+        ? `<span class="admin-badge admin-badge--voted">Уже проголосовал</span>`
+        : "";
+      const btnText = present ? "Снять отметку" : "Подтвердить присутствие";
+      const btnClass = "admin-presence-btn" + (present ? " is-revoke" : "");
+
+      return `
+        <div class="admin-user-card${present ? " is-present" : ""}">
+          <div class="admin-user-card__info">
+            <div class="admin-user-card__name">${escapeHtml(u.fullName || u.phone)}</div>
+            <div class="admin-user-card__meta">
+              <span>Тел.: <b>${escapeHtml(u.phone || u.login)}</b></span>
+              <span>Группа: <b>${escapeHtml(u.group || "—")}</b></span>
+              <span>Болеет за: <b>${escapeHtml(u.supporterOf || "Просто зритель")}</b></span>
+            </div>
+            <div class="admin-user-card__badges">
+              ${statusBadge}
+              ${votedBadge}
+            </div>
+          </div>
+          <div class="admin-user-card__action">
+            <button
+              type="button"
+              class="${btnClass}"
+              data-admin-toggle-login="${escapeHtml(u.login || u.phone)}"
+              data-admin-next-present="${present ? "0" : "1"}"
+            >${btnText}</button>
+          </div>
+        </div>
+      `;
+    })
+    .join("");
+
+  adminUsersList.querySelectorAll("[data-admin-toggle-login]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const targetLogin = btn.getAttribute("data-admin-toggle-login");
+      const nextPresent = btn.getAttribute("data-admin-next-present") === "1";
+      btn.disabled = true;
+      setAdminPresence(targetLogin, nextPresent);
+    });
+  });
+}
+
+async function fetchAdminUsers() {
+  if (!isAdminUser()) return;
+  showAdminError("");
+
+  if (location.protocol === "file:") {
+    const localProfiles = readJSON(LS_LOCAL_PROFILES, {});
+    const votesMap = readJSON(LS_VOTES_BY_USER, {});
+    adminUsersCache = Object.values(localProfiles).map((u) => ({
+      login: u.phone,
+      phone: u.phone,
+      fullName: u.fullName,
+      group: u.notBmstu ? "Не из МГТУ им. Н.Э. Баумана" : u.group,
+      notBmstu: Boolean(u.notBmstu),
+      supporterOf: u.supporterOf,
+      present: Boolean(u.present),
+      verifiedBy: u.verifiedBy || "",
+      hasVoted: Boolean(votesMap[String(u.phone || "").toLowerCase()]),
+    }));
+    renderAdminPanel();
+    return;
+  }
+
+  try {
+    const res = await fetch("/api/votes", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "same-origin",
+      body: JSON.stringify({
+        action: "admin_list",
+        login: currentUser.login,
+        token: currentUser.token,
+      }),
+    });
+    const data = await res.json().catch(() => null);
+    if (!res.ok || !data || !data.ok) {
+      showAdminError((data && data.error) || "Не удалось загрузить список участников");
+      return;
+    }
+    if (Array.isArray(data.users)) {
+      adminUsersCache = data.users;
+    }
+    renderAdminPanel();
+  } catch {
+    showAdminError("Ошибка соединения с сервером при загрузке списка");
+  }
+}
+
+async function setAdminPresence(targetLogin, present) {
+  if (!isAdminUser() || !targetLogin) return;
+  showAdminError("");
+
+  if (location.protocol === "file:") {
+    const localProfiles = readJSON(LS_LOCAL_PROFILES, {});
+    if (localProfiles[targetLogin]) {
+      localProfiles[targetLogin].present = Boolean(present);
+      localProfiles[targetLogin].verifiedBy = present ? currentUser.login : "";
+      writeJSON(LS_LOCAL_PROFILES, localProfiles);
+    }
+    await fetchAdminUsers();
+    return;
+  }
+
+  try {
+    const res = await fetch("/api/votes", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "same-origin",
+      body: JSON.stringify({
+        action: "admin_set_presence",
+        login: currentUser.login,
+        token: currentUser.token,
+        target_login: targetLogin,
+        present: Boolean(present),
+      }),
+    });
+    const data = await res.json().catch(() => null);
+    if (!res.ok || !data || !data.ok) {
+      showAdminError((data && data.error) || "Не удалось изменить статус присутствия");
+      renderAdminPanel();
+      return;
+    }
+    if (Array.isArray(data.users)) {
+      adminUsersCache = data.users;
+    }
+    renderAdminPanel();
+  } catch {
+    showAdminError("Ошибка соединения с сервером");
+    renderAdminPanel();
+  }
+}
+
+if (adminSearchInput) {
+  adminSearchInput.addEventListener("input", () => renderAdminPanel());
+}
+if (adminRefreshBtn) {
+  adminRefreshBtn.addEventListener("click", () => fetchAdminUsers());
+}
+if (adminLogoutBtn) {
+  adminLogoutBtn.addEventListener("click", handleLogout);
+}
+adminFilterBtns.forEach((btn) => {
+  btn.addEventListener("click", () => {
+    adminCurrentFilter = btn.getAttribute("data-admin-filter") || "all";
+    adminFilterBtns.forEach((b) => b.classList.toggle("is-active", b === btn));
+    renderAdminPanel();
+  });
+});
+
 function renderVoteCards() {
   const loggedIn = isLoggedIn();
+  const presentOk = isUserPresent();
   const my = myVote();
   const counts = localCounts();
   voteGrid.innerHTML = "";
@@ -460,6 +750,8 @@ function renderVoteCards() {
       ? "Ваш голос"
       : !loggedIn
       ? "Войти и голосовать"
+      : !presentOk
+      ? "Нужна отметка админа"
       : "Голосовать";
     card.innerHTML = `
       <span class="alley-card__photo vote-card__photo">
@@ -467,7 +759,7 @@ function renderVoteCards() {
       </span>
       <p class="alley-card__name vote-card__name"><span>${fullName}</span>${groupHtml}</p>
       ${votesBlock}
-      <button class="btn-frame" type="button" data-id="${f.id}" ${my || votingInProgress ? "disabled" : ""}>
+      <button class="btn-frame" type="button" data-id="${f.id}" ${my || votingInProgress || !presentOk ? "disabled" : ""}>
         <svg class="btn-frame__svg" viewBox="0 0 320 94" preserveAspectRatio="none" aria-hidden="true">
           <path d="M6 47 C 30 40 44 24 50 8 L 270 8 C 276 24 290 40 314 47 C 290 54 276 70 270 86 L 50 86 C 44 70 30 54 6 47 Z" fill="none" stroke="url(#frameGrad)" stroke-width="1.6" vector-effect="non-scaling-stroke"/>
         </svg>
@@ -493,12 +785,19 @@ function applyServerState(data) {
   if (!data || typeof data !== "object") return;
   const prevVote = myVote();
   const prevId = prevVote ? prevVote.id : null;
+  const prevPresent = isUserPresent();
 
   if (data.counts && typeof data.counts === "object") {
     writeJSON(LS_COUNTS, data.counts);
   }
   if (currentUser && currentUser.login && data.my_vote) {
     setMyVoteForUser(currentUser.login, data.my_vote);
+  }
+  if (typeof data.is_admin === "boolean" && currentUser) {
+    currentUser.is_admin = data.is_admin;
+  }
+  if (Array.isArray(data.users)) {
+    adminUsersCache = data.users;
   }
   if (currentUser && data.profile && typeof data.profile === "object") {
     currentUser.profile = data.profile;
@@ -509,8 +808,9 @@ function applyServerState(data) {
 
   const nowVote = myVote();
   const nowId = nowVote ? nowVote.id : null;
+  const nowPresent = isUserPresent();
 
-  if (prevId !== nowId) {
+  if (prevId !== nowId || prevPresent !== nowPresent) {
     renderVoteCards();
     return;
   }
@@ -567,7 +867,6 @@ if (cabinetRegForm) {
     const password = (regPassInput.value || "").trim();
     const pwdCheck = checkPasswordRules(password);
 
-    // Обязательная проверка каждого пункта
     if (!phone) {
       showRegError("Введите корректный номер телефона (10–11 цифр)");
       regPhoneInput.focus();
@@ -629,6 +928,7 @@ if (cabinetRegForm) {
         }
         currentUser = {
           login: data.login || phone,
+          is_admin: false,
           token: data.token,
           profile: data.profile || {
             phone,
@@ -636,6 +936,8 @@ if (cabinetRegForm) {
             group: groupVal,
             notBmstu: isNotBmstu,
             supporterOf,
+            present: false,
+            verifiedBy: "",
           },
         };
         writeJSON(LS_AUTH, currentUser);
@@ -650,17 +952,24 @@ if (cabinetRegForm) {
         return;
       }
     } else {
-      // Локальный режим при открытии по file:// — храним только криптографический хэш пароля
       const pwdHash = await hashPasswordClient(password);
       const localProfiles = readJSON(LS_LOCAL_PROFILES, {});
       if (localProfiles[phone]) {
         showRegError("Этот номер телефона уже зарегистрирован. Перейдите во вкладку «Вход».");
         return;
       }
-      const profile = { phone, fullName, group: groupVal, notBmstu: isNotBmstu, supporterOf };
+      const profile = {
+        phone,
+        fullName,
+        group: groupVal,
+        notBmstu: isNotBmstu,
+        supporterOf,
+        present: false,
+        verifiedBy: "",
+      };
       localProfiles[phone] = { ...profile, passwordHash: pwdHash };
       writeJSON(LS_LOCAL_PROFILES, localProfiles);
-      currentUser = { login: phone, token: "local." + Date.now(), profile };
+      currentUser = { login: phone, is_admin: false, token: "local." + Date.now(), profile };
       writeJSON(LS_AUTH, currentUser);
       regPassInput.value = "";
       updatePasswordChecklist();
@@ -682,7 +991,7 @@ async function hashPasswordClient(pwd) {
   return "";
 }
 
-// Отправка входа
+// Отправка входа (для зрителей по номеру телефона и для 6 администраторов admin1..admin6)
 if (cabinetLoginForm) {
   cabinetLoginForm.addEventListener("submit", async (e) => {
     e.preventDefault();
@@ -690,11 +999,11 @@ if (cabinetLoginForm) {
 
     const rawLogin = (loginPhoneInput.value || "").trim();
     const normPhone = normalizePhoneClient(rawLogin);
-    const loginKey = normPhone || rawLogin;
+    const loginKey = normPhone || rawLogin.toLowerCase();
     const password = (loginPassInput.value || "").trim();
 
     if (!loginKey || !password) {
-      showLoginError("Введите номер телефона и пароль");
+      showLoginError("Введите номер телефона (или логин администратора) и пароль");
       return;
     }
 
@@ -712,14 +1021,18 @@ if (cabinetLoginForm) {
           return;
         }
         if (!res.ok || !data || !data.ok) {
-          showLoginError((data && data.error) || "Неверный номер телефона или пароль");
+          showLoginError((data && data.error) || "Неверный логин (номер телефона) или пароль");
           return;
         }
         currentUser = {
           login: data.login || loginKey,
+          is_admin: Boolean(data.is_admin),
           token: data.token,
-          profile: data.profile || { phone: loginKey, fullName: loginKey },
+          profile: data.profile || { phone: loginKey, fullName: loginKey, present: false },
         };
+        if (Array.isArray(data.users)) {
+          adminUsersCache = data.users;
+        }
         writeJSON(LS_AUTH, currentUser);
         loginPassInput.value = "";
         applyServerState(data);
@@ -732,6 +1045,34 @@ if (cabinetLoginForm) {
       }
     } else {
       const pwdHash = await hashPasswordClient(password);
+      // Проверка 6 фиксированных аккаунтов администраторов в локальном режиме
+      if (Object.prototype.hasOwnProperty.call(LOCAL_ADMIN_HASHES, loginKey)) {
+        if (pwdHash !== LOCAL_ADMIN_HASHES[loginKey]) {
+          showLoginError("Неверный логин администратора или пароль");
+          return;
+        }
+        currentUser = {
+          login: loginKey,
+          is_admin: true,
+          token: "local.admin." + Date.now(),
+          profile: {
+            phone: loginKey,
+            fullName: `Администратор (${loginKey})`,
+            group: "Оргкомитет / Администратор",
+            notBmstu: false,
+            supporterOf: "Администратор",
+            present: true,
+            isAdmin: true,
+          },
+        };
+        writeJSON(LS_AUTH, currentUser);
+        loginPassInput.value = "";
+        await fetchAdminUsers();
+        updateAuthUI();
+        renderVoteCards();
+        return;
+      }
+
       const localProfiles = readJSON(LS_LOCAL_PROFILES, {});
       const found = localProfiles[loginKey];
       if (!found || !pwdHash || found.passwordHash !== pwdHash) {
@@ -740,6 +1081,7 @@ if (cabinetLoginForm) {
       }
       currentUser = {
         login: loginKey,
+        is_admin: false,
         token: "local." + Date.now(),
         profile: {
           phone: found.phone,
@@ -747,6 +1089,8 @@ if (cabinetLoginForm) {
           group: found.group,
           notBmstu: found.notBmstu,
           supporterOf: found.supporterOf,
+          present: Boolean(found.present),
+          verifiedBy: found.verifiedBy || "",
         },
       };
       writeJSON(LS_AUTH, currentUser);
@@ -759,6 +1103,7 @@ if (cabinetLoginForm) {
 
 function handleLogout() {
   currentUser = null;
+  adminUsersCache = [];
   try { localStorage.removeItem(LS_AUTH); } catch {}
   updateAuthUI();
   switchCabinetTab("login");
@@ -776,6 +1121,14 @@ async function voteFor(id) {
   if (!isLoggedIn()) {
     showAuthError("Для голосования необходимо зарегистрироваться или войти в личный кабинет");
     openCabinetModal("register");
+    return;
+  }
+  if (isAdminUser()) {
+    showAuthError("Аккаунт администратора предназначен для подтверждения присутствия участников.");
+    return;
+  }
+  if (!isUserPresent()) {
+    showAuthError("Право на голосование открывается только после подтверждения вашего присутствия от администратора в БЗДК.");
     return;
   }
   if (myVote() || votingInProgress) return;
@@ -816,6 +1169,16 @@ async function voteFor(id) {
       renderVoteCards();
       return;
     }
+    if (res.status === 403) {
+      votingInProgress = false;
+      showAuthError(
+        (data && data.error) ||
+          "Право на голосование открывается только после подтверждения вашего присутствия администратором в БЗДК."
+      );
+      syncVotesFromServer();
+      renderVoteCards();
+      return;
+    }
     if (res.status === 409) {
       votingInProgress = false;
       if (data) applyServerState(data);
@@ -842,17 +1205,19 @@ let voteStateShown = null;
 function refreshVote() {
   const open = voteIsOpen();
   const loggedIn = isLoggedIn();
+  const adminMode = isAdminUser();
+  const presentOk = isUserPresent();
   if (open !== voteStateShown) {
     voteStateShown = open;
     voteLocked.hidden = open;
     if (voteAuth) voteAuth.hidden = !open;
     voteSub.textContent = open
-      ? "Выбери лучшего профорга МГТУ — один аккаунт, один голос"
+      ? "Выбери лучшего профорга МГТУ — регистрация + подтверждение присутствия в БЗДК"
       : "Выбор лучшего профорга откроется вместе с финалом конкурса";
     if (open) syncVotesFromServer();
   }
   if (voteGrid) {
-    voteGrid.hidden = !(open && loggedIn);
+    voteGrid.hidden = !(open && loggedIn && !adminMode && presentOk);
   }
   if (!open) {
     const left = Math.max(0, VOTE_OPEN_AT - Date.now());

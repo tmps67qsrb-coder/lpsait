@@ -10,7 +10,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&family=Viaoda+Libre&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css?v=50">
+  <link rel="stylesheet" href="styles.css?v=51">
 </head>
 <body>
 
@@ -1138,11 +1138,23 @@
         <div class="vote-auth__bar" id="voteUserBar" hidden>
           <div class="vote-auth__user-info">
             <p class="vote-auth__user">Личный кабинет: <b id="voteUserName"></b></p>
-            <p class="vote-auth__bzd-note">В личном кабинете скоро появятся лист рассадки и данные о входе в БЗДК</p>
+            <p class="vote-auth__bzd-note" id="voteUserSubNote">В личном кабинете скоро появятся лист рассадки и данные о входе в БЗДК</p>
           </div>
           <div class="vote-auth__bar-btns">
             <button class="vote-auth__cabinet-btn" type="button" id="voteOpenCabinetBtn">Профиль</button>
             <button class="vote-auth__logout" type="button" id="voteLogoutBtn">Выйти</button>
+          </div>
+        </div>
+
+        <div class="vote-presence-wait" id="votePresenceWaitBanner" hidden>
+          <svg class="vote-presence-wait__icon" viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+            <circle cx="12" cy="11" r="2.5"/>
+            <path d="M7.5 16.5c1.2-1.6 2.8-2.4 4.5-2.4s3.3.8 4.5 2.4"/>
+          </svg>
+          <div class="vote-presence-wait__body">
+            <p class="vote-presence-wait__title">Ожидается подтверждение вашего присутствия от администратора</p>
+            <p class="vote-presence-wait__sub">Право на голосование открывается после регистрации и подтверждения вашего присутствия администратором в БЗДК. Подойдите к стойке организаторов — после отметки голосование откроется автоматически.</p>
           </div>
         </div>
       </div>
@@ -1313,11 +1325,11 @@
 
         <!-- Форма входа -->
         <form class="cabinet-form" id="cabinetLoginForm" autocomplete="off" hidden novalidate>
-          <p class="cabinet-form__hint">Введите номер телефона, указанный при регистрации, и пароль от аккаунта.</p>
+          <p class="cabinet-form__hint">Введите номер телефона, указанный при регистрации (или логин администратора), и пароль.</p>
 
           <label class="vote-auth__field">
-            <span>Номер телефона (логин) *</span>
-            <input type="tel" id="loginPhoneInput" name="login" placeholder="+7 (999) 000-00-00" required autocomplete="username">
+            <span>Номер телефона или логин *</span>
+            <input type="text" id="loginPhoneInput" name="login" placeholder="+7 (999) 000-00-00" required autocomplete="username">
           </label>
 
           <div class="vote-auth__field">
@@ -1367,8 +1379,12 @@
             <b class="cabinet-profile__val" id="cabProfileSupporter">—</b>
           </div>
           <div class="cabinet-profile__row">
+            <span class="cabinet-profile__label">Присутствие в БЗДК:</span>
+            <b class="cabinet-profile__val" id="cabProfilePresence">Ожидает подтверждения админом</b>
+          </div>
+          <div class="cabinet-profile__row">
             <span class="cabinet-profile__label">Статус голосования:</span>
-            <b class="cabinet-profile__val cabinet-profile__val--accent" id="cabProfileVote">Доступно в разделе «Голосование»</b>
+            <b class="cabinet-profile__val cabinet-profile__val--accent" id="cabProfileVote">Доступно после подтверждения присутствия</b>
           </div>
         </div>
 
@@ -1380,6 +1396,56 @@
             <span>К голосованию</span>
           </a>
           <button class="vote-auth__logout" type="button" id="cabLogoutBtn">Выйти из аккаунта</button>
+        </div>
+      </div>
+
+      <!-- Экран Личного кабинета АДМИНИСТРАТОРА (подтверждение присутствия и допуск к голосованию) -->
+      <div class="cabinet-admin" id="cabinetAdminView" hidden>
+        <div class="cabinet-admin__top">
+          <div class="cabinet-admin__badge">
+            <span class="cabinet-admin__dot"></span>
+            <span>Панель администратора: <b id="adminLoginLabel">admin</b></span>
+          </div>
+          <div class="cabinet-admin__top-actions">
+            <button class="cabinet-admin__refresh" type="button" id="adminRefreshBtn">Обновить список</button>
+            <button class="vote-auth__logout" type="button" id="adminLogoutBtn">Выйти</button>
+          </div>
+        </div>
+
+        <div class="cabinet-admin__stats">
+          <div class="cabinet-admin__stat">
+            <b id="adminStatTotal">0</b>
+            <span>Зарегистрировано</span>
+          </div>
+          <div class="cabinet-admin__stat cabinet-admin__stat--ok">
+            <b id="adminStatPresent">0</b>
+            <span>Подтверждено в зале</span>
+          </div>
+          <div class="cabinet-admin__stat cabinet-admin__stat--voted">
+            <b id="adminStatVoted">0</b>
+            <span>Проголосовало</span>
+          </div>
+        </div>
+
+        <div class="cabinet-admin__controls">
+          <input
+            type="search"
+            class="cabinet-admin__search"
+            id="adminSearchInput"
+            placeholder="Поиск по ФИО, телефону, группе или участнику..."
+            autocomplete="off"
+          >
+          <div class="cabinet-admin__filters" role="tablist" aria-label="Фильтр списка участников">
+            <button class="cabinet-admin__filter is-active" type="button" data-admin-filter="all">Все</button>
+            <button class="cabinet-admin__filter" type="button" data-admin-filter="pending">Ожидают</button>
+            <button class="cabinet-admin__filter" type="button" data-admin-filter="present">Подтверждены</button>
+          </div>
+        </div>
+
+        <p class="vote-auth__error" id="adminErrorMsg" hidden></p>
+
+        <div class="cabinet-admin__list" id="adminUsersList">
+          <p class="cabinet-admin__empty">Загрузка списка зарегистрированных участников...</p>
         </div>
       </div>
     </div>
@@ -1406,6 +1472,6 @@
     </div>
   </div>
 
-  <script src="script.js?v=49"></script>
+  <script src="script.js?v=51"></script>
 </body>
 </html>
