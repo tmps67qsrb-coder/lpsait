@@ -12,6 +12,8 @@ try {
 
 const VALID_IDS = new Set(["f1", "f2", "f3", "f4", "f5", "f6", "f7", "f8", "f9"]);
 const SECRET_KEY = process.env.VOTE_SECRET || "lp2026_bmstu_proforg_session_secret_983";
+const ENC_KEY = crypto.createHash("sha256").update(SECRET_KEY).digest();
+const PBKDF2_ITERATIONS = 100000;
 
 const VALID_SUPPORTERS = new Set([
   "Гузько Никита Андреевич",
@@ -26,33 +28,59 @@ const VALID_SUPPORTERS = new Set([
   "Просто зритель",
 ]);
 
-// Защита от перебора паролей: максимум 5 неудачных попыток за 5 минут
+const JSON_HEADERS = {
+  "Content-Type": "application/json; charset=utf-8",
+  "Cache-Control": "no-store, no-cache, must-revalidate",
+  "X-Content-Type-Options": "nosniff",
+  "X-Frame-Options": "DENY",
+};
+
+function jsonResponse(payload, status = 200) {
+  return new Response(JSON.stringify(payload), {
+    status,
+    headers: JSON_HEADERS,
+  });
+}
+
+// Защита от перебора паролей и спама регистраций
 const FAILED_ATTEMPTS = new Map();
 
-function getRateLimitKey(req, login) {
-  const ip =
+function getClientIp(req) {
+  return (
     req.headers.get("x-nf-client-connection-ip") ||
     req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
-    "ip_unknown";
-  return `${ip}:${login || "general"}`;
+    "ip_unknown"
+  );
 }
 
-function isRateLimited(key) {
+function getRateLimitKey(req, login) {
+  return `${getClientIp(req)}:${login || "general"}`;
+}
+
+function isRateLimited(key, maxAttempts = 5, windowMs = 300000) {
   const now = Date.now();
-  const times = (FAILED_ATTEMPTS.get(key) || []).filter((t) => now - t < 300000);
+  const times = (FAILED_ATTEMPTS.get(key) || []).filter((t) => now - t < windowMs);
   FAILED_ATTEMPTS.set(key, times);
-  return times.length >= 5;
+  return times.length >= maxAttempts;
 }
 
-function recordFailedAttempt(key) {
+function recordAttempt(key, windowMs = 300000) {
   const now = Date.now();
-  const times = (FAILED_ATTEMPTS.get(key) || []).filter((t) => now - t < 300000);
+  const times = (FAILED_ATTEMPTS.get(key) || []).filter((t) => now - t < windowMs);
   times.push(now);
   FAILED_ATTEMPTS.set(key, times);
 }
 
 function resetRateLimit(key) {
   FAILED_ATTEMPTS.delete(key);
+}
+
+function sanitizeText(str, maxLen = 140) {
+  return String(str || "")
+    .replace(/[\u0000-\u001F\u007F<>]/g, "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, maxLen);
 }
 
 function normalizePhone(raw) {
@@ -87,8 +115,78 @@ function validatePasswordFormat(password) {
   return null;
 }
 
-function hashPassword(password) {
-  return crypto.createHash("sha256").update(String(password).trim()).digest("hex");
+// Надёжное хэширование пароля: PBKDF2-HMAC-SHA256 с индивидуальной солью
+function createPasswordHash(password) {
+  const salt = crypto.randomBytes(16).toString("hex");
+  const derived = crypto
+    .pbkdf2Sync(String(password).trim(), salt, PBKDF2_ITERATIONS, 32, "sha256")
+    .toString("hex");
+  return `pbkdf2$${PBKDF2_ITERATIONS}$${salt}$${derived}`;
+}
+
+function verifyPasswordHash(password, storedHash) {
+  if (!password || !storedHash) return false;
+  const pwd = String(password).trim();
+  const stored = String(storedHash).trim();
+
+  if (stored.startsWith("pbkdf2$")) {
+    const parts = stored.split("$");
+    if (parts.length !== 4) return false;
+    const iterations = parseInt(parts[1], 10);
+    const salt = parts[2];
+    const expectedHex = parts[3];
+    if (!iterations || !salt || !expectedHex) return false;
+    try {
+      const derived = crypto
+        .pbkdf2Sync(pwd, salt, iterations, 32, "sha256")
+        .toString("hex");
+      return crypto.timingSafeEqual(
+        Buffer.from(derived, "hex"),
+        Buffer.from(expectedHex, "hex")
+      );
+    } catch {
+      return false;
+    }
+  }
+
+  // Обратная совместимость со старыми SHA-256 хэшами
+  const legacySha = crypto.createHash("sha256").update(pwd).digest("hex");
+  try {
+    return crypto.timingSafeEqual(
+      Buffer.from(legacySha.toLowerCase(), "hex"),
+      Buffer.from(stored.toLowerCase(), "hex")
+    );
+  } catch {
+    return false;
+  }
+}
+
+// Шифрование персональных данных (AES-256-GCM) при хранении
+function encryptField(plainText) {
+  const text = String(plainText || "");
+  if (!text) return "";
+  const iv = crypto.randomBytes(12);
+  const cipher = crypto.createCipheriv("aes-256-gcm", ENC_KEY, iv);
+  const encrypted = Buffer.concat([cipher.update(text, "utf8"), cipher.final()]);
+  const tag = cipher.getAuthTag();
+  return `enc1:${iv.toString("hex")}:${tag.toString("hex")}:${encrypted.toString("hex")}`;
+}
+
+function decryptField(value) {
+  const str = String(value || "");
+  if (!str.startsWith("enc1:")) return str;
+  const parts = str.split(":");
+  if (parts.length !== 4) return "";
+  try {
+    const iv = Buffer.from(parts[1], "hex");
+    const tag = Buffer.from(parts[2], "hex");
+    const data = Buffer.from(parts[3], "hex");
+    const decipher = crypto.createDecipheriv("aes-256-gcm", ENC_KEY, iv);
+    decipher.setAuthTag(tag);
+    return Buffer.concat([decipher.update(data), decipher.final()]).toString("utf8");
+  } catch {
+    return "";
+  }
 }
 
 function createToken(login) {
@@ -124,9 +222,16 @@ async function findUserAccount(store, rawLogin) {
 
   // 1. Ищем в индивидуальном ключе Blobs
   const blobUser = await store.get(`user:${lookupKey}`, { type: "json" });
-  if (blobUser) return blobUser;
+  if (blobUser) {
+    return {
+      ...blobUser,
+      fullName: decryptField(blobUser.fullName),
+      group: decryptField(blobUser.group),
+      supporterOf: decryptField(blobUser.supporterOf),
+    };
+  }
 
-  // 2. Ищем в общем списке или дефолтном users.json
+  // 2. Ищем в дефолтном users.json
   const dbUsers = (await store.get("users", { type: "json" })) || defaultUsers;
   if (Array.isArray(dbUsers)) {
     const found = dbUsers.find(
@@ -168,67 +273,78 @@ export default async (req) => {
 
     // 1. РЕГИСТРАЦИЯ В ЛИЧНОМ КАБИНЕТЕ
     if (action === "register") {
+      const regRlKey = `reg:${getClientIp(req)}`;
+      if (isRateLimited(regRlKey, 8, 300000)) {
+        return jsonResponse(
+          { ok: false, error: "Слишком много запросов на регистрацию. Подождите 5 минут." },
+          429
+        );
+      }
+
       const rawPhone = String(body.phone || body.login || "").trim();
       const phone = normalizePhone(rawPhone);
-      const fullName = String(body.fullName || "").trim().slice(0, 140);
+      const fullName = sanitizeText(body.fullName, 140);
       const notBmstu = Boolean(body.notBmstu);
-      const rawGroup = String(body.group || "").trim().slice(0, 60);
+      const rawGroup = sanitizeText(body.group, 60);
       const group = notBmstu ? "Не из МГТУ им. Н.Э. Баумана" : rawGroup;
-      const supporterOf = String(body.supporterOf || "").trim();
+      const supporterOf = sanitizeText(body.supporterOf, 80);
       const password = String(body.password || "").trim();
 
       if (!phone) {
-        return Response.json(
+        return jsonResponse(
           { ok: false, error: "Введите корректный номер телефона (например, +7 999 123-45-67)" },
-          { status: 400 }
+          400
         );
       }
       if (!fullName || fullName.length < 3 || !fullName.includes(" ")) {
-        return Response.json(
+        return jsonResponse(
           { ok: false, error: "Введите ваше полное ФИО" },
-          { status: 400 }
+          400
         );
       }
       if (!notBmstu && !rawGroup) {
-        return Response.json(
+        return jsonResponse(
           { ok: false, error: "Укажите учебную группу или выберите «Не из МГТУ им. Н.Э. Баумана»" },
-          { status: 400 }
+          400
         );
       }
       if (!supporterOf || !VALID_SUPPORTERS.has(supporterOf)) {
-        return Response.json(
+        return jsonResponse(
           { ok: false, error: "Выберите участника, за которого болеете, или «Просто зритель»" },
-          { status: 400 }
+          400
         );
       }
       const pwdError = validatePasswordFormat(password);
       if (pwdError) {
-        return Response.json({ ok: false, error: pwdError }, { status: 400 });
+        return jsonResponse({ ok: false, error: pwdError }, 400);
       }
 
       const existing = await store.get(`user:${phone}`, { type: "json" });
       if (existing) {
-        return Response.json(
+        return jsonResponse(
           {
             ok: false,
             error: "Этот номер телефона уже зарегистрирован. Перейдите во вкладку «Вход».",
           },
-          { status: 409 }
+          409
         );
       }
 
-      const userRecord = {
+      recordAttempt(regRlKey);
+
+      // Персональные данные шифруются AES-256-GCM, пароль хэшируется PBKDF2 с солью
+      const storedRecord = {
         login: phone,
         phone,
-        fullName,
-        group,
+        fullName: encryptField(fullName),
+        group: encryptField(group),
         notBmstu,
-        supporterOf,
-        password_sha256: hashPassword(password),
+        supporterOf: encryptField(supporterOf),
+        password_sha256: createPasswordHash(password),
         createdAt: Date.now(),
       };
 
-      await store.setJSON(`user:${phone}`, userRecord);
+      await store.setJSON(`user:${phone}`, storedRecord);
 
       const token = createToken(phone);
       const state = (await store.get("state", { type: "json" })) || {
@@ -236,11 +352,17 @@ export default async (req) => {
       };
       const total = Object.values(state.counts).reduce((a, b) => a + b, 0);
 
-      return Response.json({
+      return jsonResponse({
         ok: true,
         login: phone,
         token,
-        profile: formatPublicProfile(userRecord),
+        profile: {
+          phone,
+          fullName,
+          group,
+          notBmstu,
+          supporterOf,
+        },
         my_vote: null,
         counts: null,
         total,
@@ -257,24 +379,23 @@ export default async (req) => {
       const rlKey = getRateLimitKey(req, loginKey);
 
       if (isRateLimited(rlKey)) {
-        return Response.json(
+        return jsonResponse(
           { ok: false, error: "Слишком много неудачных попыток входа. Попробуйте через 5 минут." },
-          { status: 429 }
+          429
         );
       }
 
       const userAccount = await findUserAccount(store, rawLogin);
-      const pwdHash = hashPassword(password);
       const valid =
         userAccount &&
         userAccount.password_sha256 &&
-        String(userAccount.password_sha256).toLowerCase() === pwdHash.toLowerCase();
+        verifyPasswordHash(password, userAccount.password_sha256);
 
       if (!valid) {
-        recordFailedAttempt(rlKey);
-        return Response.json(
+        recordAttempt(rlKey);
+        return jsonResponse(
           { ok: false, error: "Неверный номер телефона или пароль" },
-          { status: 401 }
+          401
         );
       }
 
@@ -290,7 +411,7 @@ export default async (req) => {
       };
       const total = Object.values(state.counts).reduce((a, b) => a + b, 0);
 
-      return Response.json({
+      return jsonResponse({
         ok: true,
         login: canonicalLogin,
         token,
@@ -311,17 +432,17 @@ export default async (req) => {
       const authenticatedLogin = verifyToken(token);
 
       if (!authenticatedLogin || authenticatedLogin.toLowerCase() !== expectedLogin.toLowerCase()) {
-        return Response.json(
+        return jsonResponse(
           { ok: false, error: "Сессия истекла или недействительна. Войдите в личный кабинет." },
-          { status: 401 }
+          401
         );
       }
 
       const candidateId = String(body.id || "").trim();
       if (!VALID_IDS.has(candidateId)) {
-        return Response.json(
+        return jsonResponse(
           { ok: false, error: "Некорректный кандидат" },
-          { status: 400 }
+          400
         );
       }
 
@@ -333,14 +454,14 @@ export default async (req) => {
       };
 
       if (existingVote) {
-        return Response.json(
+        return jsonResponse(
           {
             ok: false,
             error: "Вы уже голосовали в этом конкурсе",
             my_vote: existingVote.candidateId,
             counts: state.counts,
           },
-          { status: 409 }
+          409
         );
       }
 
@@ -354,7 +475,7 @@ export default async (req) => {
 
       const total = Object.values(state.counts).reduce((a, b) => a + b, 0);
 
-      return Response.json({
+      return jsonResponse({
         ok: true,
         login: authenticatedLogin,
         token,
@@ -364,7 +485,7 @@ export default async (req) => {
       });
     }
 
-    return Response.json({ ok: false, error: "Неизвестное действие" }, { status: 400 });
+    return jsonResponse({ ok: false, error: "Неизвестное действие" }, 400);
   }
 
   // 4. ПОЛУЧЕНИЕ СОСТОЯНИЯ И ПРОФИЛЯ (GET)
@@ -389,7 +510,7 @@ export default async (req) => {
 
   const total = Object.values(state.counts).reduce((a, b) => a + b, 0);
 
-  return Response.json({
+  return jsonResponse({
     counts: myVote ? state.counts : null,
     my_vote: myVote,
     total,

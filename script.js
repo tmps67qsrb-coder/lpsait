@@ -650,14 +650,15 @@ if (cabinetRegForm) {
         return;
       }
     } else {
-      // Локальный режим при открытии по file://
+      // Локальный режим при открытии по file:// — храним только криптографический хэш пароля
+      const pwdHash = await hashPasswordClient(password);
       const localProfiles = readJSON(LS_LOCAL_PROFILES, {});
       if (localProfiles[phone]) {
         showRegError("Этот номер телефона уже зарегистрирован. Перейдите во вкладку «Вход».");
         return;
       }
       const profile = { phone, fullName, group: groupVal, notBmstu: isNotBmstu, supporterOf };
-      localProfiles[phone] = { ...profile, password };
+      localProfiles[phone] = { ...profile, passwordHash: pwdHash };
       writeJSON(LS_LOCAL_PROFILES, localProfiles);
       currentUser = { login: phone, token: "local." + Date.now(), profile };
       writeJSON(LS_AUTH, currentUser);
@@ -667,6 +668,18 @@ if (cabinetRegForm) {
       renderVoteCards();
     }
   });
+}
+
+async function hashPasswordClient(pwd) {
+  const str = String(pwd || "").trim();
+  if (window.crypto && window.crypto.subtle) {
+    const buf = new TextEncoder().encode("lp2026_salt:" + str);
+    const digest = await window.crypto.subtle.digest("SHA-256", buf);
+    return Array.from(new Uint8Array(digest))
+      .map((b) => b.toString(16).padStart(2, "0"))
+      .join("");
+  }
+  return "";
 }
 
 // Отправка входа
@@ -718,9 +731,10 @@ if (cabinetLoginForm) {
         return;
       }
     } else {
+      const pwdHash = await hashPasswordClient(password);
       const localProfiles = readJSON(LS_LOCAL_PROFILES, {});
       const found = localProfiles[loginKey];
-      if (!found || found.password !== password) {
+      if (!found || !pwdHash || found.passwordHash !== pwdHash) {
         showLoginError("Неверный номер телефона или пароль");
         return;
       }
