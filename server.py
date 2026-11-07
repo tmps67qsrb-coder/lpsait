@@ -579,16 +579,19 @@ class ProforgHandler(SimpleHTTPRequestHandler):
             self._send_json(400, {"ok": False, "error": "Обнаружен недопустимый запрос (WAF SQLi Protection)"})
             return False
 
-        if check_and_record_rate(f"burst:{client_ip}", max_attempts=80, window_sec=10):
-            ban_ip(client_ip, 120)
+        if check_and_record_rate(f"burst:{client_ip}", max_attempts=400, window_sec=10):
+            ban_ip(client_ip, 60)
             self._send_json(
                 429,
-                {"ok": False, "error": "Слишком много запросов (защита от DDoS). Подождите 2 минуты."},
-                {"Retry-After": "120"},
+                {"ok": False, "error": "Слишком много запросов (защита от DDoS). Подождите минуту."},
+                {"Retry-After": "60"},
             )
             return False
 
-        if is_api and check_and_record_rate(f"api:{client_ip}", max_attempts=50, window_sec=60):
+        is_post = self.command == "POST"
+        rate_bucket = f"api_post:{client_ip}" if is_post else f"api_get:{client_ip}"
+        rate_limit_max = 250 if is_post else 600
+        if is_api and check_and_record_rate(rate_bucket, max_attempts=rate_limit_max, window_sec=60):
             self._send_json(
                 429,
                 {"ok": False, "error": "Превышен лимит обращений к API. Пожалуйста, подождите минуту."},
@@ -737,7 +740,7 @@ class ProforgHandler(SimpleHTTPRequestHandler):
         # 1. РЕГИСТРАЦИЯ В ЛИЧНОМ КАБИНЕТЕ (ТОЛЬКО ДЛЯ УЧАСТНИКОВ/ЗРИТЕЛЕЙ, НЕ ДЛЯ АДМИНОВ)
         if action == "register":
             reg_rl_key = f"reg:{client_ip}"
-            if is_rate_limited(reg_rl_key, max_attempts=8, window_sec=300):
+            if is_rate_limited(reg_rl_key, max_attempts=120, window_sec=300):
                 self._send_json(
                     429,
                     {"ok": False, "error": "Слишком много запросов на регистрацию. Подождите 5 минут."},
@@ -1014,7 +1017,7 @@ class ProforgHandler(SimpleHTTPRequestHandler):
         # 4. ГОЛОСОВАНИЕ (ТОЛЬКО ПРИ НАЛИЧИИ РЕГИСТРАЦИИ И ПОДТВЕРЖДЕНИЯ ПРИСУТСТВИЯ ОТ АДМИНА)
         if action == "vote":
             vote_rl_key = f"vote:{client_ip}"
-            if check_and_record_rate(vote_rl_key, max_attempts=12, window_sec=60):
+            if check_and_record_rate(vote_rl_key, max_attempts=180, window_sec=60):
                 self._send_json(
                     429,
                     {"ok": False, "error": "Слишком много запросов на голосование. Подождите минуту."},
@@ -1034,6 +1037,13 @@ class ProforgHandler(SimpleHTTPRequestHandler):
                         "ok": False,
                         "error": "Сессия истекла или недействительна. Войдите в личный кабинет.",
                     },
+                )
+                return
+
+            if check_and_record_rate(f"vote_user:{authenticated_login}", max_attempts=10, window_sec=60):
+                self._send_json(
+                    429,
+                    {"ok": False, "error": "Слишком много попыток голосования. Подождите минуту."},
                 )
                 return
 

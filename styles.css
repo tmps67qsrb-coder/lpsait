@@ -3776,6 +3776,9 @@ b { color: var(--cream); font-weight: 600; }
   min-height: 100vh;
   font-family: var(--font-text);
 }
+.legal-header__inner {
+  justify-content: space-between;
+}
 .legal-section {
   padding-top: 124px;
   padding-bottom: 84px;

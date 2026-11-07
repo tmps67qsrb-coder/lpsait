@@ -537,6 +537,8 @@ function escapeHtml(str) {
     .replace(/"/g, "&quot;");
 }
 
+let lastRenderedAdminMarkup = "";
+
 function renderAdminPanel() {
   if (!adminUsersList) return;
   const users = Array.isArray(adminUsersCache) ? adminUsersCache : [];
@@ -562,15 +564,19 @@ function renderAdminPanel() {
   });
 
   if (!filtered.length) {
-    adminUsersList.innerHTML = `<p class="cabinet-admin__empty">${
+    const emptyHtml = `<p class="cabinet-admin__empty">${
       totalCount === 0
         ? "Пока нет зарегистрированных пользователей."
         : "По вашему запросу участники не найдены."
     }</p>`;
+    if (lastRenderedAdminMarkup !== emptyHtml) {
+      lastRenderedAdminMarkup = emptyHtml;
+      adminUsersList.innerHTML = emptyHtml;
+    }
     return;
   }
 
-  adminUsersList.innerHTML = filtered
+  const nextHtml = filtered
     .map((u) => {
       const present = Boolean(u.present);
       const voted = Boolean(u.hasVoted);
@@ -611,6 +617,12 @@ function renderAdminPanel() {
       `;
     })
     .join("");
+
+  if (lastRenderedAdminMarkup === nextHtml) return;
+  const prevScroll = adminUsersList.scrollTop;
+  lastRenderedAdminMarkup = nextHtml;
+  adminUsersList.innerHTML = nextHtml;
+  adminUsersList.scrollTop = prevScroll;
 
   adminUsersList.querySelectorAll("[data-admin-toggle-login]").forEach((btn) => {
     btn.addEventListener("click", () => {
@@ -789,6 +801,18 @@ function applyServerState(data) {
 
   if (data.counts && typeof data.counts === "object") {
     writeJSON(LS_COUNTS, data.counts);
+  }
+  if (
+    currentUser &&
+    Object.prototype.hasOwnProperty.call(data, "login") &&
+    (!data.login || (!data.is_admin && data.profile === null))
+  ) {
+    currentUser = null;
+    adminUsersCache = [];
+    try { localStorage.removeItem(LS_AUTH); } catch {}
+    updateAuthUI();
+    renderVoteCards();
+    return;
   }
   if (currentUser && currentUser.login && data.my_vote) {
     setMyVoteForUser(currentUser.login, data.my_vote);
@@ -1210,10 +1234,10 @@ function refreshVote() {
   if (open !== voteStateShown) {
     voteStateShown = open;
     voteLocked.hidden = open;
-    if (voteAuth) voteAuth.hidden = !open;
+    if (voteAuth) voteAuth.hidden = false;
     voteSub.textContent = open
       ? "Выбери лучшего профорга МГТУ — регистрация + подтверждение присутствия в БЗДК"
-      : "Выбор лучшего профорга откроется вместе с финалом конкурса";
+      : "Зарегистрируйтесь заранее — голосование откроется во время финала после подтверждения присутствия";
     if (open) syncVotesFromServer();
   }
   if (voteGrid) {
@@ -1231,9 +1255,11 @@ updateAuthUI();
 renderVoteCards();
 refreshVote();
 syncVotesFromServer();
-// Каждые 5 секунд синхронизируем общие голоса со всех устройств
+// Синхронизируем статус присутствия и общие голоса со всех устройств (только в активной вкладке)
 setInterval(() => {
-  if (voteIsOpen()) syncVotesFromServer();
+  if (!document.hidden && (voteIsOpen() || isLoggedIn())) {
+    syncVotesFromServer();
+  }
 }, 5000);
 
 // ---------- Таймер: отсчёт до ближайшего события конкурса ----------

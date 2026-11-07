@@ -69,6 +69,8 @@ const BANNED_IPS = new Map();
 
 let STATE_CACHE = { ts: 0, state: null };
 const STATE_CACHE_TTL_MS = 1500;
+let ADMIN_USERS_CACHE = { ts: 0, users: null };
+const ADMIN_USERS_CACHE_TTL_MS = 2500;
 
 const SQLI_PATTERN =
   /(\b(union\s+all\s+select|union\s+select|select\s+.+\s+from|insert\s+into|update\s+.+\s+set|delete\s+from|drop\s+table|alter\s+table|truncate\s+table|sqlite_master|sqlite_temp_master|information_schema|sleep\s*\(|benchmark\s*\(|waitfor\s+delay|load_file\s*\(|into\s+outfile|attach\s+database|pragma\s+)\b|('|")\s*(or|and)\s*('|"|\d)|\b(or|and)\s+1\s*=\s*1\b|--\s|--$|\/\*|\*\/|;\s*(select|drop|insert|update|delete))/i;
@@ -353,7 +355,12 @@ async function findUserAccount(store, rawLogin) {
   return null;
 }
 
-async function listAllUsersForAdmin(store) {
+async function listAllUsersForAdmin(store, forceFresh = false) {
+  const now = Date.now();
+  if (!forceFresh && ADMIN_USERS_CACHE.users && now - ADMIN_USERS_CACHE.ts < ADMIN_USERS_CACHE_TTL_MS) {
+    return ADMIN_USERS_CACHE.users;
+  }
+
   const loginsSet = new Set();
   const indexList = (await store.get("user_index", { type: "json" })) || [];
   if (Array.isArray(indexList)) {
@@ -377,31 +384,46 @@ async function listAllUsersForAdmin(store) {
     // fallback to user_index
   }
 
+  const allLogins = [...loginsSet].filter(
+    (lg) => !Object.prototype.hasOwnProperty.call(ADMIN_ACCOUNTS, lg)
+  );
   const users = [];
-  for (const lg of loginsSet) {
-    if (Object.prototype.hasOwnProperty.call(ADMIN_ACCOUNTS, lg)) continue;
-    const u = await store.get(`user:${lg}`, { type: "json" });
-    if (!u) continue;
-    const voterData = await store.get(`voter:${lg}`, { type: "json" });
-    const notBmstu = Boolean(u.notBmstu);
-    const decName = decryptField(u.fullName) || lg;
-    const decGroup = decryptField(u.group) || "";
-    const decSupporter = decryptField(u.supporterOf) || "Просто зритель";
-    users.push({
-      login: u.login || lg,
-      phone: u.phone || u.login || lg,
-      fullName: decName,
-      group: notBmstu ? "Не из МГТУ им. Н.Э. Баумана" : decGroup,
-      notBmstu,
-      supporterOf: decSupporter,
-      present: Boolean(u.present),
-      verifiedBy: String(u.verifiedBy || ""),
-      hasVoted: Boolean(voterData && voterData.candidateId),
-      createdAt: Number(u.createdAt || 0),
-    });
+  const BATCH_SIZE = 30;
+
+  for (let i = 0; i < allLogins.length; i += BATCH_SIZE) {
+    const batch = allLogins.slice(i, i + BATCH_SIZE);
+    const batchItems = await Promise.all(
+      batch.map(async (lg) => {
+        const [u, voterData] = await Promise.all([
+          store.get(`user:${lg}`, { type: "json" }),
+          store.get(`voter:${lg}`, { type: "json" }),
+        ]);
+        if (!u) return null;
+        const notBmstu = Boolean(u.notBmstu);
+        const decName = decryptField(u.fullName) || lg;
+        const decGroup = decryptField(u.group) || "";
+        const decSupporter = decryptField(u.supporterOf) || "Просто зритель";
+        return {
+          login: u.login || lg,
+          phone: u.phone || u.login || lg,
+          fullName: decName,
+          group: notBmstu ? "Не из МГТУ им. Н.Э. Баумана" : decGroup,
+          notBmstu,
+          supporterOf: decSupporter,
+          present: Boolean(u.present),
+          verifiedBy: String(u.verifiedBy || ""),
+          hasVoted: Boolean(voterData && voterData.candidateId),
+          createdAt: Number(u.createdAt || 0),
+        };
+      })
+    );
+    for (const item of batchItems) {
+      if (item) users.push(item);
+    }
   }
 
   users.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+  ADMIN_USERS_CACHE = { ts: Date.now(), users };
   return users;
 }
 
@@ -433,16 +455,19 @@ export default async (req) => {
     );
   }
 
-  if (checkAndRecordRate(`burst:${clientIp}`, 50, 10000)) {
-    banIp(clientIp, 120000);
+  if (checkAndRecordRate(`burst:${clientIp}`, 400, 10000)) {
+    banIp(clientIp, 60000);
     return jsonResponse(
-      { ok: false, error: "Слишком много запросов (защита от DDoS). Подождите 2 минуты." },
+      { ok: false, error: "Слишком много запросов (защита от DDoS). Подождите минуту." },
       429,
-      { "Retry-After": "120" }
+      { "Retry-After": "60" }
     );
   }
 
-  if (checkAndRecordRate(`api:${clientIp}`, 50, 60000)) {
+  const isPost = req.method === "POST";
+  const rateBucket = isPost ? `api_post:${clientIp}` : `api_get:${clientIp}`;
+  const rateLimitMax = isPost ? 250 : 600;
+  if (checkAndRecordRate(rateBucket, rateLimitMax, 60000)) {
     return jsonResponse(
       { ok: false, error: "Превышен лимит обращений к серверу. Подождите минуту." },
       429,
@@ -502,7 +527,7 @@ export default async (req) => {
     // 1. РЕГИСТРАЦИЯ В ЛИЧНОМ КАБИНЕТЕ (ТОЛЬКО ДЛЯ УЧАСТНИКОВ/ЗРИТЕЛЕЙ, НЕ ДЛЯ АДМИНОВ)
     if (action === "register") {
       const regRlKey = `reg:${clientIp}`;
-      if (isRateLimited(regRlKey, 8, 300000)) {
+      if (isRateLimited(regRlKey, 120, 300000)) {
         return jsonResponse(
           { ok: false, error: "Слишком много запросов на регистрацию. Подождите 5 минут." },
           429
@@ -581,6 +606,7 @@ export default async (req) => {
       };
 
       await store.setJSON(`user:${phone}`, storedRecord);
+      ADMIN_USERS_CACHE = { ts: 0, users: null };
 
       const indexList = (await store.get("user_index", { type: "json" })) || [];
       if (Array.isArray(indexList) && !indexList.includes(phone)) {
@@ -737,9 +763,10 @@ export default async (req) => {
         existingRecord.present = presentVal;
         existingRecord.verifiedBy = presentVal ? authenticatedLogin : "";
         await store.setJSON(`user:${targetLogin}`, existingRecord);
+        ADMIN_USERS_CACHE = { ts: 0, users: null };
       }
 
-      const adminUsers = await listAllUsersForAdmin(store);
+      const adminUsers = await listAllUsersForAdmin(store, action === "admin_set_presence");
       const state = await getCachedState(store);
       const total = Object.values(state.counts).reduce((a, b) => a + b, 0);
 
@@ -755,7 +782,7 @@ export default async (req) => {
 
     // 4. ГОЛОСОВАНИЕ (ТОЛЬКО ПРИ НАЛИЧИИ РЕГИСТРАЦИИ И ПОДТВЕРЖДЕНИЯ ПРИСУТСТВИЯ ОТ АДМИНА)
     if (action === "vote") {
-      if (checkAndRecordRate(`vote:${clientIp}`, 12, 60000)) {
+      if (checkAndRecordRate(`vote:${clientIp}`, 180, 60000)) {
         return jsonResponse(
           { ok: false, error: "Слишком много запросов на голосование. Подождите минуту." },
           429
@@ -772,6 +799,13 @@ export default async (req) => {
         return jsonResponse(
           { ok: false, error: "Сессия истекла или недействительна. Войдите в личный кабинет." },
           401
+        );
+      }
+
+      if (checkAndRecordRate(`vote_user:${authenticatedLogin}`, 10, 60000)) {
+        return jsonResponse(
+          { ok: false, error: "Слишком много попыток голосования. Подождите минуту." },
+          429
         );
       }
 
@@ -828,6 +862,7 @@ export default async (req) => {
       state.counts[candidateId] = (state.counts[candidateId] || 0) + 1;
       await store.setJSON("state", state);
       STATE_CACHE = { ts: Date.now(), state };
+      ADMIN_USERS_CACHE = { ts: 0, users: null };
 
       const total = Object.values(state.counts).reduce((a, b) => a + b, 0);
 
