@@ -247,9 +247,9 @@
           <stop offset=".75" stop-color="#9fe0ff" stop-opacity=".9"/>
           <stop offset="1" stop-color="#7fd4ff" stop-opacity=".85"/>
         </linearGradient>
-        <!-- Траектория для главной страницы: идёт слева и плавно огибает заголовок -->
-        <path id="stardustHeroCurve" d="M180 0 C180 300 280 480 660 510 C1040 540 1260 660 1260 960"/>
-        <path id="stardustHeroDash" d="M204 0 C204 300 304 480 684 526 C1064 556 1284 660 1284 960"/>
+        <!-- Траектория для главной страницы: идёт слева и совершает полный космический виток вокруг заголовка -->
+        <path id="stardustHeroCurve" d="M180 0 C180 180 220 260 320 330 C460 440 600 520 720 520 C960 520 1180 470 1180 340 C1180 225 960 225 720 225 C480 225 300 290 320 410 C340 510 480 580 720 600 C960 620 1240 680 1260 960"/>
+        <path id="stardustHeroDash" d="M200 0 C200 180 238 266 336 338 C474 448 610 530 728 530 C968 530 1196 476 1196 342 C1196 215 962 215 722 215 C478 215 288 284 308 412 C328 522 470 592 718 612 C964 632 1246 686 1276 960"/>
         <!-- Базовые траектории для непрерывного перехода сквозь все секции сайта -->
         <path id="stardustCurve" d="M1260 0 C1260 220 880 300 560 460 C240 620 180 740 180 960"/>
         <path id="stardustCurveAlt" d="M180 0 C180 220 560 300 880 460 C1200 620 1260 740 1260 960"/>
@@ -269,13 +269,14 @@
       </g>
       <use href="#stardustHeroDash" fill="none" stroke="#8ce0ff" stroke-width="1" stroke-dasharray="2 14" stroke-linecap="round" opacity=".5"/>
       <g fill="#ffffff">
-        <circle cx="202" cy="202" r="2.4" opacity=".88"/>
-        <circle cx="301" cy="381" r="2.7" opacity=".92"/>
-        <circle cx="507" cy="486" r="2.2" opacity=".85"/>
-        <circle cx="820" cy="530" r="2.6" opacity=".92"/>
-        <circle cx="1070" cy="613" r="2.0" opacity=".82"/>
-        <circle cx="1220" cy="767" r="2.5" opacity=".88"/>
-        <circle cx="1256" cy="891" r="2.2" opacity=".85"/>
+        <circle cx="228" cy="235" r="2.4" opacity=".88"/>
+        <circle cx="528" cy="466" r="2.6" opacity=".92"/>
+        <circle cx="702" cy="519" r="2.2" opacity=".85"/>
+        <circle cx="1126" cy="436" r="2.6" opacity=".92"/>
+        <circle cx="1040" cy="239" r="2.0" opacity=".82"/>
+        <circle cx="383" cy="293" r="2.4" opacity=".88"/>
+        <circle cx="481" cy="553" r="2.5" opacity=".88"/>
+        <circle cx="1130" cy="718" r="2.2" opacity=".85"/>
       </g>
     </svg>
 
@@ -1460,6 +1461,6 @@
     </div>
   </div>
 
-  <script src="script.js?v=60"></script>
+  <script src="script.js?v=61"></script>
 </body>
 </html>
