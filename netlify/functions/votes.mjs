@@ -179,6 +179,34 @@ function sanitizeText(str, maxLen = 140) {
     .slice(0, maxLen);
 }
 
+function validateRussianPhone(raw) {
+  const s = String(raw || "").trim();
+  if (Object.prototype.hasOwnProperty.call(ADMIN_ACCOUNTS, s.toLowerCase())) {
+    return { valid: false, error: "Логин администратора нельзя использовать для регистрации зрителя" };
+  }
+  if (s.startsWith("+") && !s.startsWith("+7")) {
+    return { valid: false, error: "Регистрация доступна только для российских номеров телефонов (+7)" };
+  }
+  const digits = s.replace(/\D/g, "");
+  let national = "";
+  if (digits.length === 11) {
+    if (digits[0] !== "7" && digits[0] !== "8") {
+      return { valid: false, error: "Российский номер телефона должен начинаться с +7 или 8" };
+    }
+    national = digits.slice(1);
+  } else if (digits.length === 10) {
+    national = digits;
+  } else {
+    return { valid: false, error: "Номер должен содержать ровно 10 цифр после кода страны (+7 (9XX) XXX-XX-XX)" };
+  }
+
+  if (!/^[3489]/.test(national)) {
+    return { valid: false, error: "Неверный код оператора РФ (ожидается мобильный номер +7 9XX)" };
+  }
+
+  return { valid: true, normalized: "+7" + national };
+}
+
 function normalizePhone(raw) {
   const str = String(raw || "").trim();
   if (Object.prototype.hasOwnProperty.call(ADMIN_ACCOUNTS, str.toLowerCase())) {
@@ -188,11 +216,8 @@ function normalizePhone(raw) {
   if (digits.length === 11 && (digits.startsWith("8") || digits.startsWith("7"))) {
     return "+7" + digits.slice(1);
   }
-  if (digits.length === 10 && digits.startsWith("9")) {
+  if (digits.length === 10 && /^[3489]/.test(digits)) {
     return "+7" + digits;
-  }
-  if (digits.length >= 10 && digits.length <= 15) {
-    return "+" + digits;
   }
   return "";
 }
@@ -627,7 +652,14 @@ export default async (req) => {
         );
       }
 
-      const phone = normalizePhone(rawPhone);
+      const phoneCheck = validateRussianPhone(rawPhone);
+      if (!phoneCheck.valid) {
+        return jsonResponse(
+          { ok: false, error: phoneCheck.error },
+          400
+        );
+      }
+      const phone = phoneCheck.normalized;
       const fullName = sanitizeText(body.fullName, 140);
       const notBmstu = Boolean(body.notBmstu);
       const rawGroup = sanitizeText(body.group, 60);
@@ -635,9 +667,9 @@ export default async (req) => {
       const supporterOf = sanitizeText(body.supporterOf, 80);
       const password = String(body.password || "").trim();
 
-      if (!phone || !SAFE_LOGIN_RE.test(phone.toLowerCase())) {
+      if (!SAFE_LOGIN_RE.test(phone.toLowerCase())) {
         return jsonResponse(
-          { ok: false, error: "Введите корректный номер телефона (например, +7 999 123-45-67)" },
+          { ok: false, error: "Некорректный формат номера телефона" },
           400
         );
       }

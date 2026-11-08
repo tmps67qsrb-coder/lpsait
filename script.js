@@ -182,6 +182,7 @@ const cabinetLoginForm = document.getElementById("cabinetLoginForm");
 
 // Поля регистрации
 const regPhoneInput = document.getElementById("regPhoneInput");
+const regPhoneHint = document.getElementById("regPhoneHint");
 const regNameInput = document.getElementById("regNameInput");
 const regNotBmstuBtn = document.getElementById("regNotBmstuBtn");
 const regGroupInputWrap = document.getElementById("regGroupInputWrap");
@@ -269,22 +270,37 @@ const isAdminUser = () =>
 const isUserPresent = () =>
   Boolean(isLoggedIn() && !isAdminUser() && currentUser.profile && currentUser.profile.present);
 
-function normalizePhoneClient(raw) {
+function validateRussianPhone(raw) {
   const s = String(raw || "").trim();
   if (Object.prototype.hasOwnProperty.call(LOCAL_ADMIN_HASHES, s.toLowerCase())) {
-    return "";
+    return { valid: false, error: "Логин администратора нельзя использовать для регистрации зрителя" };
+  }
+  if (s.startsWith("+") && !s.startsWith("+7")) {
+    return { valid: false, error: "Регистрация разрешена только для российских номеров (+7)" };
   }
   const digits = s.replace(/\D/g, "");
-  if (digits.length === 11 && (digits.startsWith("8") || digits.startsWith("7"))) {
-    return "+7" + digits.slice(1);
+  let national = "";
+  if (digits.length === 11) {
+    if (digits[0] !== "7" && digits[0] !== "8") {
+      return { valid: false, error: "Российский номер телефона должен начинаться с +7 или 8" };
+    }
+    national = digits.slice(1);
+  } else if (digits.length === 10) {
+    national = digits;
+  } else {
+    return { valid: false, error: "Введите полный российский номер телефона (10 цифр после +7)" };
   }
-  if (digits.length === 10 && digits.startsWith("9")) {
-    return "+7" + digits;
+
+  if (!/^[3489]\d{9}$/.test(national)) {
+    return { valid: false, error: "Неверный код оператора РФ (ожидается мобильный номер +7 9XX)" };
   }
-  if (digits.length >= 10 && digits.length <= 15) {
-    return "+" + digits;
-  }
-  return "";
+
+  return { valid: true, normalized: "+7" + national, national };
+}
+
+function normalizePhoneClient(raw) {
+  const check = validateRussianPhone(raw);
+  return check.valid ? check.normalized : "";
 }
 
 function generateLocalUserId(phone, profilesMap) {
@@ -339,6 +355,136 @@ function bindPassToggle(btn, input) {
 }
 bindPassToggle(regPassToggle, regPassInput);
 bindPassToggle(loginPassToggle, loginPassInput);
+
+// Интерактивная маска и валидация формата российского номера телефона (+7 (9XX) XXX-XX-XX)
+function initRussianPhoneMask(input, hintEl, allowAdmin = false) {
+  if (!input) return;
+
+  function updateHint(state, text) {
+    if (!hintEl) return;
+    hintEl.textContent = text;
+    hintEl.classList.remove("field-hint--valid", "field-hint--error");
+    input.classList.remove("is-valid", "is-invalid");
+    if (state === "valid") {
+      hintEl.classList.add("field-hint--valid");
+      input.classList.add("is-valid");
+    } else if (state === "error") {
+      hintEl.classList.add("field-hint--error");
+      input.classList.add("is-invalid");
+    }
+  }
+
+  function formatValue(currentVal) {
+    const s = String(currentVal || "").trim();
+    if (!s) return "";
+
+    if (allowAdmin && /^[a-zA-Z]/.test(s)) {
+      return s;
+    }
+
+    if (s.startsWith("+") && !s.startsWith("+7")) {
+      updateHint("error", "Разрешены только российские номера (+7)");
+      return "+7 (";
+    }
+
+    const digits = s.replace(/\D/g, "");
+    if (!digits) return "+7 (";
+
+    let national = "";
+    if (digits[0] === "7" || digits[0] === "8") {
+      national = digits.slice(1, 11);
+    } else {
+      national = digits.slice(0, 10);
+    }
+
+    let formatted = "+7";
+    if (national.length > 0) formatted += " (" + national.slice(0, 3);
+    if (national.length >= 3) formatted += ") " + national.slice(3, 6);
+    if (national.length >= 6) formatted += "-" + national.slice(6, 8);
+    if (national.length >= 8) formatted += "-" + national.slice(8, 10);
+
+    if (national.length === 10) {
+      if (national[0] === "9") {
+        updateHint("valid", "✓ Мобильный номер РФ корректен");
+      } else if (/^[348]/.test(national)) {
+        updateHint("valid", "✓ Российский номер корректен");
+      } else {
+        updateHint("error", "Некорректный код (ожидается мобильный +7 9XX)");
+      }
+    } else if (national.length > 0) {
+      const left = 10 - national.length;
+      updateHint("neutral", `Осталось ввести цифр: ${left} (+7 (9XX) XXX-XX-XX)`);
+    } else {
+      updateHint("neutral", "Только российские номера: +7 (9XX) XXX-XX-XX");
+    }
+
+    return formatted;
+  }
+
+  input.addEventListener("focus", () => {
+    if (!input.value.trim()) {
+      input.value = "+7 (";
+      updateHint("neutral", "Введите 10 цифр номера после +7");
+    }
+  });
+
+  input.addEventListener("input", () => {
+    const oldVal = input.value;
+    input.value = formatValue(oldVal);
+  });
+
+  input.addEventListener("keydown", (e) => {
+    if (e.key === "Backspace") {
+      const pos = input.selectionStart;
+      const end = input.selectionEnd;
+      if (pos === end && pos > 0) {
+        const val = input.value;
+        const charBefore = val[pos - 1];
+        if (charBefore === " " || charBefore === ")" || charBefore === "-" || charBefore === "(") {
+          e.preventDefault();
+          let cutIdx = pos - 1;
+          while (cutIdx > 0 && /\D/.test(val[cutIdx - 1])) {
+            cutIdx--;
+          }
+          if (cutIdx > 3) {
+            const nextVal = val.slice(0, cutIdx - 1) + val.slice(pos);
+            input.value = formatValue(nextVal);
+          }
+        }
+      }
+    }
+  });
+
+  input.addEventListener("blur", () => {
+    const s = input.value.trim();
+    if (allowAdmin && /^[a-zA-Z]/.test(s)) {
+      return;
+    }
+    const digits = s.replace(/\D/g, "");
+    if (digits === "7" || digits === "8" || !digits) {
+      input.value = "";
+      updateHint("neutral", "Только российские номера: +7 (9XX) XXX-XX-XX");
+      return;
+    }
+    const check = validateRussianPhone(s);
+    if (!check.valid) {
+      updateHint("error", check.error);
+    } else {
+      updateHint("valid", "✓ Мобильный номер РФ корректен");
+    }
+  });
+
+  input.addEventListener("paste", (e) => {
+    const text = (e.clipboardData || window.clipboardData).getData("text") || "";
+    if (text.trim().startsWith("+") && !text.trim().startsWith("+7")) {
+      e.preventDefault();
+      updateHint("error", "Разрешены только российские номера телефонов (+7)");
+    }
+  });
+}
+
+initRussianPhoneMask(regPhoneInput, regPhoneHint, false);
+initRussianPhoneMask(loginPhoneInput, null, true);
 
 // Переключатель плашки «Не из МГТУ им. Н.Э. Баумана»
 function setNotBmstuState(active) {
@@ -975,18 +1121,19 @@ if (cabinetRegForm) {
     showRegError("");
 
     const rawPhone = (regPhoneInput.value || "").trim();
-    const phone = normalizePhoneClient(rawPhone);
+    const phoneCheck = validateRussianPhone(rawPhone);
+    if (!phoneCheck.valid) {
+      showRegError(phoneCheck.error);
+      regPhoneInput.classList.add("is-invalid");
+      regPhoneInput.focus();
+      return;
+    }
+    const phone = phoneCheck.normalized;
     const fullName = (regNameInput.value || "").trim();
     const groupVal = isNotBmstu ? "Не из МГТУ им. Н.Э. Баумана" : (regGroupInput.value || "").trim();
     const supporterOf = (regSupporterSelect.value || "").trim();
     const password = (regPassInput.value || "").trim();
     const pwdCheck = checkPasswordRules(password);
-
-    if (!phone) {
-      showRegError("Введите корректный номер телефона (10–11 цифр)");
-      regPhoneInput.focus();
-      return;
-    }
     if (!fullName || fullName.length < 3 || !fullName.includes(" ")) {
       showRegError("Пожалуйста, укажите полное ФИО (Фамилия Имя Отчество)");
       regNameInput.focus();

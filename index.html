@@ -1242,8 +1242,9 @@
           <p class="cabinet-form__hint">Все поля обязательны для заполнения. Без регистрации голосование недоступно.</p>
 
           <label class="vote-auth__field">
-            <span>Номер телефона (логин) *</span>
-            <input type="tel" id="regPhoneInput" name="phone" placeholder="+7 (999) 000-00-00" required autocomplete="tel">
+            <span>Номер телефона (РФ, логин) *</span>
+            <input type="tel" id="regPhoneInput" name="phone" placeholder="+7 (999) 000-00-00" required autocomplete="tel" maxlength="18" inputmode="tel">
+            <small class="field-hint" id="regPhoneHint">Только российские номера: +7 (9XX) XXX-XX-XX</small>
           </label>
 
           <label class="vote-auth__field">
@@ -1462,6 +1463,6 @@
     </div>
   </div>
 
-  <script src="script.js?v=68"></script>
+  <script src="script.js?v=69"></script>
 </body>
 </html>

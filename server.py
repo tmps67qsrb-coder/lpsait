@@ -180,6 +180,32 @@ def sanitize_text(val: str, max_len: int = 140) -> str:
     return cleaned[:max_len]
 
 
+def validate_russian_phone(raw: str) -> tuple[bool, str, str]:
+    """
+    Проверяет, что телефонный номер принадлежит РФ (+7).
+    Возвращает (is_valid, normalized_phone, error_message).
+    """
+    s = str(raw or "").strip()
+    if s.lower() in ADMIN_ACCOUNTS:
+        return False, "", "Логин администратора нельзя использовать для регистрации зрителя"
+    if s.startswith("+") and not s.startswith("+7"):
+        return False, "", "Регистрация разрешена только для российских номеров телефонов (+7)"
+    digits = re.sub(r"\D", "", s)
+    if len(digits) == 11:
+        if digits[0] not in ("7", "8"):
+            return False, "", "Российский номер должен начинаться с +7 или 8"
+        national = digits[1:]
+    elif len(digits) == 10:
+        national = digits
+    else:
+        return False, "", "Номер должен содержать ровно 10 цифр после кода страны (+7 (9XX) XXX-XX-XX)"
+
+    if national[0] not in ("9", "3", "4", "8"):
+        return False, "", "Неверный код оператора РФ (ожидается мобильный номер +7 9XX)"
+
+    return True, "+7" + national, ""
+
+
 def normalize_phone(raw: str) -> str:
     s = str(raw or "").strip()
     if s.lower() in ADMIN_ACCOUNTS:
@@ -187,10 +213,8 @@ def normalize_phone(raw: str) -> str:
     digits = re.sub(r"\D", "", s)
     if len(digits) == 11 and digits[0] in ("7", "8"):
         return "+7" + digits[1:]
-    if len(digits) == 10 and digits.startswith("9"):
+    if len(digits) == 10 and digits[0] in ("9", "3", "4", "8"):
         return "+7" + digits
-    if 10 <= len(digits) <= 15:
-        return "+" + digits
     return ""
 
 
@@ -831,7 +855,11 @@ class ProforgHandler(SimpleHTTPRequestHandler):
                 self._send_json(400, {"ok": False, "error": "Регистрация аккаунтов администраторов запрещена."})
                 return
 
-            phone = normalize_phone(raw_phone)
+            is_valid_phone, phone, phone_err = validate_russian_phone(raw_phone)
+            if not is_valid_phone:
+                self._send_json(400, {"ok": False, "error": phone_err})
+                return
+
             full_name = sanitize_text(data.get("fullName"), 140)
             not_bmstu = bool(data.get("notBmstu"))
             raw_group = sanitize_text(data.get("group"), 60)
@@ -839,10 +867,10 @@ class ProforgHandler(SimpleHTTPRequestHandler):
             supporter_of = sanitize_text(data.get("supporterOf"), 80)
             password = str(data.get("password") or "").strip()
 
-            if not phone or not SAFE_LOGIN_RE.match(phone.lower()):
+            if not SAFE_LOGIN_RE.match(phone.lower()):
                 self._send_json(
                     400,
-                    {"ok": False, "error": "Введите корректный номер телефона (например, +7 999 123-45-67)"},
+                    {"ok": False, "error": "Некорректный формат номера телефона"},
                 )
                 return
             if len(full_name) < 3 or " " not in full_name or not SAFE_NAME_RE.match(full_name):

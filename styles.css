@@ -2966,6 +2966,28 @@ b { color: var(--cream); font-weight: 600; }
   border-color: var(--accent);
   box-shadow: 0 0 18px rgba(140, 224, 255, 0.35), inset 0 1px 4px rgba(0, 0, 0, 0.45);
 }
+.vote-auth__field input.is-valid {
+  border-color: rgba(90, 235, 140, 0.75);
+  box-shadow: 0 0 14px rgba(90, 235, 140, 0.28), inset 0 1px 4px rgba(0, 0, 0, 0.45);
+}
+.vote-auth__field input.is-invalid {
+  border-color: rgba(255, 90, 120, 0.85);
+  box-shadow: 0 0 14px rgba(255, 90, 120, 0.35), inset 0 1px 4px rgba(0, 0, 0, 0.45);
+}
+.field-hint {
+  display: block;
+  font-size: 12.5px;
+  line-height: 1.4;
+  color: rgba(180, 225, 255, 0.72);
+  margin-top: 4px;
+  transition: color 0.2s ease;
+}
+.field-hint--valid {
+  color: #7ef5b2 !important;
+}
+.field-hint--error {
+  color: #ff8a9e !important;
+}
 .vote-auth__error {
   font-size: 15px;
   font-weight: 500;
