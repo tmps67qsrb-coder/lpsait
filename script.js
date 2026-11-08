@@ -1584,25 +1584,18 @@ document.querySelectorAll(".faq__item").forEach((item) => {
 })();
 
 // ============================================================
-// ФОНОВАЯ АТМОСФЕРНАЯ МУЗЫКА (Menta — Alessandro Cortini)
-// Автоматический запуск при заходе на сайт на негромкой комфортной громкости
+// ФОНОВАЯ МУЗЫКА
+// Полностью автоматический запуск при открытии сайта (без кнопок)
 // ============================================================
 (function initBackgroundMusic() {
   const audio = document.getElementById("bgMusic");
-  const toggleBtn = document.getElementById("audioToggleBtn");
   if (!audio) return;
 
-  // Негромкая комфортная фоновая громкость (18%)
-  const TARGET_VOLUME = 0.18;
+  const TARGET_VOLUME = 0.32;
   let fadeTimer = null;
-  let isManuallyPaused = false;
+  let isUnlocked = false;
 
-  // Сбрасываем старые блокировки сессии, чтобы при входе на сайт музыка всегда запускалась автоматически
-  try {
-    sessionStorage.removeItem("lp_music_paused");
-  } catch (e) {}
-
-  function fadeVolume(target, duration, onComplete) {
+  function fadeVolume(target, duration) {
     if (fadeTimer) clearInterval(fadeTimer);
     const start = audio.volume;
     const stepTime = 40;
@@ -1615,45 +1608,32 @@ document.querySelectorAll(".faq__item").forEach((item) => {
       if (progress >= 1) {
         clearInterval(fadeTimer);
         fadeTimer = null;
-        if (onComplete) onComplete();
       }
     }, stepTime);
   }
 
-  function updateUI(playing) {
-    if (!toggleBtn) return;
-    if (playing) {
-      toggleBtn.classList.add("is-playing");
-      toggleBtn.setAttribute("aria-label", "Выключить музыку");
-      toggleBtn.setAttribute("title", "Выключить музыку (Menta — Alessandro Cortini)");
-    } else {
-      toggleBtn.classList.remove("is-playing");
-      toggleBtn.setAttribute("aria-label", "Включить музыку");
-      toggleBtn.setAttribute("title", "Включить музыку (Menta — Alessandro Cortini)");
-    }
-  }
-
-  // 1. Прямая попытка запуска со звуком (срабатывает, если браузер уже доверяет домену или разрешает автоплей)
+  // 1. Прямая попытка немедленного запуска со звуком
   function attemptDirectPlay() {
-    if (isManuallyPaused) return;
     audio.muted = false;
     audio.volume = TARGET_VOLUME;
     const promise = audio.play();
     if (promise !== undefined) {
       promise
         .then(() => {
-          updateUI(true);
+          isUnlocked = true;
         })
         .catch(() => {
-          // Если браузер заблокировал автоплей со звуком: запускаем беззвучно и вешаем слушатели на любое первое действие
+          // Если браузер заблокировал запуск со звуком без действия пользователя:
+          // немедленно запускаем воспроизведение в muted-режиме (разрешено 100% браузеров)
+          // и мгновенно активируем звук при любом первом взаимодействии
           startMutedWithGestureUnlock();
         });
     }
   }
 
-  // 2. Muted-запуск (разрешён 100% браузеров) + мгновенное включение звука при первом клике/тапе/скролле
+  // 2. Muted-запуск + автоматическое включение звука при любом первом действии на странице
   function startMutedWithGestureUnlock() {
-    if (isManuallyPaused) return;
+    if (isUnlocked) return;
     audio.muted = true;
     audio.volume = TARGET_VOLUME;
     const mutedPromise = audio.play();
@@ -1661,32 +1641,29 @@ document.querySelectorAll(".faq__item").forEach((item) => {
       mutedPromise.catch(() => {});
     }
 
-    const unlockEvents = ["pointerdown", "touchstart", "mousedown", "click", "keydown", "scroll", "wheel"];
+    const unlockEvents = [
+      "pointerdown", "touchstart", "mousedown", "click", "keydown",
+      "scroll", "wheel", "mousemove", "pointermove"
+    ];
 
     function tryUnmute() {
-      if (isManuallyPaused) {
-        removeUnlockListeners();
-        return;
-      }
+      if (isUnlocked) return;
       audio.muted = false;
       audio.volume = 0;
       const playPromise = audio.play();
       if (playPromise !== undefined) {
         playPromise
           .then(() => {
-            // Успешно разблокировано! Снимаем слушатели и плавно доводим громкость до комфортных 18%
+            isUnlocked = true;
             removeUnlockListeners();
-            updateUI(true);
-            fadeVolume(TARGET_VOLUME, 1200);
+            fadeVolume(TARGET_VOLUME, 900);
           })
           .catch(() => {
-            // Если данное событие браузер не счёл за user gesture (например, пассивный скролл в части версий),
-            // оставляем поток играть muted и держим слушатели активными для следующего клика/тапа
             audio.muted = true;
           });
       } else {
+        isUnlocked = true;
         removeUnlockListeners();
-        updateUI(true);
         audio.volume = TARGET_VOLUME;
       }
     }
@@ -1704,39 +1681,15 @@ document.querySelectorAll(".faq__item").forEach((item) => {
     });
   }
 
-  // Кнопка в шапке служит ручным переключателем (выключить/включить звук)
-  if (toggleBtn) {
-    toggleBtn.addEventListener("click", (e) => {
-      e.stopPropagation();
-      if (!audio.paused && !audio.muted) {
-        isManuallyPaused = true;
-        fadeVolume(0, 300, () => {
-          audio.pause();
-          updateUI(false);
-        });
-      } else {
-        isManuallyPaused = false;
-        audio.muted = false;
-        audio.volume = 0;
-        const p = audio.play();
-        if (p !== undefined) {
-          p.then(() => {
-            updateUI(true);
-            fadeVolume(TARGET_VOLUME, 800);
-          }).catch(() => {
-            updateUI(false);
-          });
-        }
-      }
-    });
-  }
-
-  // Запуск при старте страницы
+  // Запуск при открытии сайта
   if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", attemptDirectPlay);
   } else {
     attemptDirectPlay();
   }
+  window.addEventListener("load", () => {
+    if (audio.paused) attemptDirectPlay();
+  });
 })();
 
 // ---------- Всплывающая плашка: Cookie и согласие на сбор персональных данных ----------
