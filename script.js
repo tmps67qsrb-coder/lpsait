@@ -1583,6 +1583,128 @@ document.querySelectorAll(".faq__item").forEach((item) => {
   });
 })();
 
+// ============================================================
+// ФОНОВАЯ АТМОСФЕРНАЯ МУЗЫКА (Menta — Alessandro Cortini)
+// Автозапуск при входе на сайт + авто-разблокировка при любом взаимодействии
+// ============================================================
+(function initBackgroundMusic() {
+  const audio = document.getElementById("bgMusic");
+  const toggleBtn = document.getElementById("audioToggleBtn");
+  if (!audio) return;
+
+  const TARGET_VOLUME = 0.45;
+  let userExplicitlyPaused = false;
+  try {
+    userExplicitlyPaused = sessionStorage.getItem("lp_music_paused") === "1";
+  } catch (e) {}
+
+  let isPlaying = false;
+  let fadeTimer = null;
+
+  function fadeVolume(target, duration, onComplete) {
+    if (fadeTimer) clearInterval(fadeTimer);
+    const start = audio.volume;
+    const stepTime = 50;
+    const steps = Math.max(1, Math.floor(duration / stepTime));
+    let currentStep = 0;
+    fadeTimer = setInterval(() => {
+      currentStep++;
+      const progress = Math.min(1, currentStep / steps);
+      audio.volume = Math.max(0, Math.min(1, start + (target - start) * progress));
+      if (progress >= 1) {
+        clearInterval(fadeTimer);
+        fadeTimer = null;
+        if (onComplete) onComplete();
+      }
+    }, stepTime);
+  }
+
+  function updateUI(playing) {
+    isPlaying = playing;
+    if (!toggleBtn) return;
+    if (playing) {
+      toggleBtn.classList.add("is-playing");
+      toggleBtn.setAttribute("aria-label", "Выключить музыку");
+      toggleBtn.setAttribute("title", "Выключить музыку (Menta — Alessandro Cortini)");
+    } else {
+      toggleBtn.classList.remove("is-playing");
+      toggleBtn.setAttribute("aria-label", "Включить музыку");
+      toggleBtn.setAttribute("title", "Включить музыку (Menta — Alessandro Cortini)");
+    }
+  }
+
+  function playMusic() {
+    if (userExplicitlyPaused) return;
+    audio.volume = 0;
+    const promise = audio.play();
+    if (promise !== undefined) {
+      promise
+        .then(() => {
+          updateUI(true);
+          fadeVolume(TARGET_VOLUME, 1500);
+        })
+        .catch(() => {
+          updateUI(false);
+          attachUnlockListeners();
+        });
+    }
+  }
+
+  function pauseMusic() {
+    fadeVolume(0, 350, () => {
+      audio.pause();
+      updateUI(false);
+    });
+  }
+
+  const unlockEvents = ["pointerdown", "touchstart", "click", "keydown", "scroll", "wheel"];
+  function onFirstInteraction() {
+    removeUnlockListeners();
+    if (!userExplicitlyPaused && audio.paused) {
+      playMusic();
+    }
+  }
+
+  function attachUnlockListeners() {
+    unlockEvents.forEach((evt) => {
+      window.addEventListener(evt, onFirstInteraction, { once: true, passive: true });
+    });
+  }
+
+  function removeUnlockListeners() {
+    unlockEvents.forEach((evt) => {
+      window.removeEventListener(evt, onFirstInteraction, { passive: true });
+    });
+  }
+
+  if (toggleBtn) {
+    toggleBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      if (isPlaying && !audio.paused) {
+        userExplicitlyPaused = true;
+        try {
+          sessionStorage.setItem("lp_music_paused", "1");
+        } catch (err) {}
+        pauseMusic();
+      } else {
+        userExplicitlyPaused = false;
+        try {
+          sessionStorage.removeItem("lp_music_paused");
+        } catch (err) {}
+        playMusic();
+      }
+    });
+  }
+
+  // Запуск при входе на страницу
+  if (!userExplicitlyPaused) {
+    playMusic();
+    attachUnlockListeners();
+  } else {
+    updateUI(false);
+  }
+})();
+
 // ---------- Всплывающая плашка: Cookie и согласие на сбор персональных данных ----------
 (function initCookieConsent() {
   const banner = document.getElementById("cookieConsentBanner");

@@ -621,7 +621,7 @@ class ProforgHandler(SimpleHTTPRequestHandler):
         self.send_header("X-XSS-Protection", "1; mode=block")
         self.send_header(
             "Content-Security-Policy",
-            "default-src 'self'; img-src 'self' data: https:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; script-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'self';",
+            "default-src 'self'; media-src 'self'; img-src 'self' data: https:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; script-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'self';",
         )
         super().end_headers()
 
