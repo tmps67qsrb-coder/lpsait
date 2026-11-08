@@ -1812,7 +1812,7 @@ document.querySelectorAll(".faq__item").forEach((item) => {
       <svg class="section-chrome-star section-chrome-star--r"><use href="#chrome-star"/></svg>
       <svg class="section-chrome-star section-chrome-star--sm"><use href="#chrome-star"/></svg>
       <div class="hero-shoot" style="top:18%;left:14%;animation:shootStar 14s ease-in ${shootDelay1}s infinite"></div>
-      <div class="hero-shoot" style="top:62%;left:52%;animation:shootStar 18s ease-in ${shootDelay2}s infinite"></div>
+      <div class="hero-shoot" style="top:62%;left:52%;animation:shootStarAlt 18s ease-in ${shootDelay2}s infinite"></div>
     `;
     sec.insertBefore(cosmicWrap, sec.firstChild);
   });

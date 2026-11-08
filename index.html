@@ -10,7 +10,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&family=Viaoda+Libre&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css?v=62">
+  <link rel="stylesheet" href="styles.css?v=72">
 </head>
 <body>
 
@@ -248,9 +248,9 @@
           <stop offset=".75" stop-color="#9fe0ff" stop-opacity=".9"/>
           <stop offset="1" stop-color="#7fd4ff" stop-opacity=".85"/>
         </linearGradient>
-        <!-- Траектория для главной страницы: идёт слева, извилистым космическим шлейфом огибает текст «Лучший профорг» и уходит дальше -->
-        <path id="stardustHeroCurve" d="M180 0 C180 150 200 215 270 246 C354 280 540 264 680 258 C810 253 970 278 1100 262 C1190 251 1260 560 1260 960"/>
-        <path id="stardustHeroDash" d="M202 0 C202 150 222 225 292 258 C376 292 560 276 700 270 C830 265 990 290 1120 274 C1210 263 1282 560 1282 960"/>
+        <!-- Траектория для главной страницы: плавный космический шлейф ровно с двумя изящными заворотами огибает текст «Лучший профорг» -->
+        <path id="stardustHeroCurve" d="M180 0 C180 160 215 255 350 255 L1080 255 C1215 255 1260 350 1260 520 L1260 960"/>
+        <path id="stardustHeroDash" d="M202 0 C202 165 237 267 370 267 L1060 267 C1195 267 1282 365 1282 532 L1282 960"/>
         <!-- Базовые траектории для непрерывного перехода сквозь все секции сайта -->
         <path id="stardustCurve" d="M1260 0 C1260 220 880 300 560 460 C240 620 180 740 180 960"/>
         <path id="stardustCurveAlt" d="M180 0 C180 220 560 300 880 460 C1200 620 1260 740 1260 960"/>
@@ -270,14 +270,15 @@
       </g>
       <use href="#stardustHeroDash" fill="none" stroke="#8ce0ff" stroke-width="1" stroke-dasharray="2 14" stroke-linecap="round" opacity=".5"/>
       <g fill="#ffffff">
-        <circle cx="181" cy="56" r="2.4" opacity=".9"/>
-        <circle cx="209" cy="190" r="2.4" opacity=".9"/>
-        <circle cx="270" cy="246" r="2.4" opacity=".9"/>
-        <circle cx="471" cy="267" r="2.4" opacity=".9"/>
-        <circle cx="707" cy="257" r="2.4" opacity=".9"/>
-        <circle cx="1021" cy="267" r="2.4" opacity=".9"/>
-        <circle cx="1152" cy="292" r="2.4" opacity=".9"/>
-        <circle cx="1247" cy="669" r="2.4" opacity=".9"/>
+        <circle cx="180" cy="70" r="2.4" opacity=".9"/>
+        <circle cx="210" cy="190" r="2.4" opacity=".9"/>
+        <circle cx="320" cy="255" r="2.4" opacity=".9"/>
+        <circle cx="580" cy="255" r="2.4" opacity=".9"/>
+        <circle cx="860" cy="255" r="2.4" opacity=".9"/>
+        <circle cx="1110" cy="255" r="2.4" opacity=".9"/>
+        <circle cx="1235" cy="310" r="2.4" opacity=".9"/>
+        <circle cx="1260" cy="620" r="2.4" opacity=".9"/>
+        <circle cx="1260" cy="840" r="2.4" opacity=".9"/>
       </g>
     </svg>
 
@@ -1446,6 +1447,6 @@
     </div>
   </div>
 
-  <script src="script.js?v=71"></script>
+  <script src="script.js?v=72"></script>
 </body>
 </html>
