@@ -1200,13 +1200,16 @@ function applyServerState(data) {
 async function syncVotesFromServer() {
   if (location.protocol === "file:") return;
   try {
-    const qs = new URLSearchParams();
-    if (currentUser && currentUser.login && currentUser.token) {
-      qs.set("login", currentUser.login);
-      qs.set("token", currentUser.token);
+    const headers = {};
+    if (currentUser && currentUser.token) {
+      headers["Authorization"] = `Bearer ${currentUser.token}`;
+      if (currentUser.login) {
+        headers["X-User-Login"] = currentUser.login;
+      }
     }
-    const res = await fetch(`/api/votes?${qs.toString()}`, {
+    const res = await fetch("/api/votes", {
       method: "GET",
+      headers,
       credentials: "same-origin",
       cache: "no-store",
     });

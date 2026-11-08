@@ -17,6 +17,7 @@ import hmac
 import json
 import os
 import re
+import secrets
 import sqlite3
 import sys
 import threading
@@ -28,10 +29,50 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_PATH = os.path.join(BASE_DIR, "votes.db")
 USERS_JSON_PATH = os.path.join(BASE_DIR, "netlify", "functions", "users.json")
 VALID_IDS = {f"f{i}" for i in range(1, 10)}
-SECRET_KEY = os.environ.get("VOTE_SECRET", "lp2026_bmstu_proforg_session_secret_983").encode("utf-8")
+
+
+def load_or_generate_secret_key() -> bytes:
+    env_sec = os.environ.get("VOTE_SECRET")
+    if env_sec and env_sec.strip():
+        return env_sec.strip().encode("utf-8")
+    key_file = os.path.join(BASE_DIR, ".secret_key")
+    if os.path.isfile(key_file):
+        try:
+            with open(key_file, "rb") as f:
+                k = f.read().strip()
+                if len(k) >= 32:
+                    return k
+        except Exception:
+            pass
+    # Генерируем стойкий криптографический ключ вместо публичной дефолтной строки
+    new_key = secrets.token_hex(32).encode("utf-8")
+    try:
+        flags = os.O_WRONLY | os.O_CREAT | os.O_TRUNC
+        mode = 0o600
+        fd = os.open(key_file, flags, mode)
+        with os.fdopen(fd, "wb") as f:
+            f.write(new_key)
+    except Exception:
+        pass
+    return new_key
+
+
+SECRET_KEY = load_or_generate_secret_key()
 ENC_KEY = hashlib.sha256(SECRET_KEY).digest()
 PBKDF2_ITERATIONS = 100000
 DB_LOCK = threading.Lock()
+
+# Официальное открытие финала и приёма голосов: 8 декабря 2026 года, 17:00 MSK (UTC+3)
+# Unix timestamp для 2026-12-08T17:00:00+03:00 = 1796738400
+VOTING_START_TIMESTAMP = 1796738400
+# VOTE_TIME_ENFORCE: 0 = режим предварительного тестирования, 1 = строгий боевой режим
+VOTE_TIME_ENFORCE = os.environ.get("VOTE_TIME_ENFORCE", "0") == "1"
+
+
+def is_voting_open() -> bool:
+    if not VOTE_TIME_ENFORCE:
+        return True
+    return time.time() >= VOTING_START_TIMESTAMP
 
 # Ограничение числа одновременных тяжёлых операций PBKDF2 и подключений (защита от CPU/Thread DoS)
 CRYPTO_SEMAPHORE = threading.BoundedSemaphore(4)
@@ -100,6 +141,7 @@ SQLI_PATTERN = re.compile(
 SAFE_LOGIN_RE = re.compile(r"^(\+[0-9]{10,15}|[a-z0-9_.+-]{3,64})$")
 SAFE_NAME_RE = re.compile(r"^[а-яА-ЯёЁa-zA-Z\s\-]{3,140}$")
 SAFE_GROUP_RE = re.compile(r"^[а-яА-ЯёЁa-zA-Z0-9\s\-/]{1,60}$")
+SAFE_IP_RE = re.compile(r"^[0-9a-fA-F:.\-]{3,64}$")
 
 
 def detect_sql_injection(*values) -> bool:
@@ -122,6 +164,8 @@ def _prune_dict(store: dict, now: float):
 
 
 def is_ip_banned(ip: str) -> int:
+    if not ip or ip in ("127.0.0.1", "::1", "localhost"):
+        return 0
     now = time.time()
     with RATE_LOCK:
         until = BANNED_IPS.get(ip, 0)
@@ -133,6 +177,9 @@ def is_ip_banned(ip: str) -> int:
 
 
 def ban_ip(ip: str, duration_sec: int = 300):
+    if not ip or ip in ("127.0.0.1", "::1", "localhost"):
+        # Никогда не баним localhost целиком во избежание блокировки пользователей за Reverse Proxy
+        return
     now = time.time()
     with RATE_LOCK:
         _prune_dict(BANNED_IPS, now)
@@ -269,8 +316,8 @@ def verify_password_hash(password: str, stored_hash: str) -> bool:
         except Exception:
             return False
 
-    legacy_sha = hashlib.sha256(pwd).hexdigest()
-    return hmac.compare_digest(legacy_sha.lower(), stored.lower())
+    # Устаревшие небезопасные хэши одиночного SHA-256 без соли полностью отключены
+    return False
 
 
 def _keystream(nonce: bytes, length: int) -> bytes:
@@ -661,8 +708,33 @@ class ProforgHandler(SimpleHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
+    def _get_client_ip(self) -> str:
+        """
+        Корректно извлекает реальный IP клиента.
+        При работе за доверенным локальным Reverse Proxy (Nginx, Cloudflare)
+        безопасно считывает X-Forwarded-For или X-Real-IP, исключая бан localhost.
+        """
+        direct_ip = self.client_address[0]
+        if direct_ip in ("127.0.0.1", "::1", "localhost"):
+            forwarded = self.headers.get("X-Forwarded-For")
+            if forwarded:
+                client = forwarded.split(",")[0].strip()
+                if client and SAFE_IP_RE.match(client):
+                    return client
+            real_ip = self.headers.get("X-Real-IP")
+            if real_ip:
+                client = real_ip.strip()
+                if client and SAFE_IP_RE.match(client):
+                    return client
+        return direct_ip
+
+    def list_directory(self, path):
+        """Полностью блокирует вывод листинга директорий (Directory Listing Prevention)."""
+        self.send_error(403, "Forbidden")
+        return None
+
     def _check_ddos_and_waf(self, is_api: bool = False) -> bool:
-        client_ip = self.client_address[0]
+        client_ip = self._get_client_ip()
         banned_left = is_ip_banned(client_ip)
         if banned_left > 0:
             self._send_json(
@@ -717,12 +789,22 @@ class ProforgHandler(SimpleHTTPRequestHandler):
             return
 
         if is_api:
+            # Извлечение токена из заголовка Authorization: Bearer <token> (защита от утечки в query string и логах)
+            auth_header = self.headers.get("Authorization", "")
+            token = ""
+            if auth_header.startswith("Bearer "):
+                token = auth_header[7:].strip()[:256]
+
+            raw_login = (self.headers.get("X-User-Login", "") or "").strip()[:128]
+
             qs = urllib.parse.parse_qs(parsed.query)
-            token = (qs.get("token", [""])[0] or "").strip()[:256]
-            raw_login = (qs.get("login", [""])[0] or "").strip()[:128]
+            if not token:
+                token = (qs.get("token", [""])[0] or "").strip()[:256]
+            if not raw_login:
+                raw_login = (qs.get("login", [""])[0] or "").strip()[:128]
 
             if detect_sql_injection(token, raw_login):
-                ban_ip(self.client_address[0], 300)
+                ban_ip(self._get_client_ip(), 300)
                 self._send_json(400, {"ok": False, "error": "Недопустимые параметры запроса"})
                 return
 
@@ -772,13 +854,29 @@ class ProforgHandler(SimpleHTTPRequestHandler):
             )
             return
 
+        # Защита от листинга директорий (Directory Listing Prevention)
+        local_path = self.translate_path(self.path)
+        if os.path.isdir(local_path):
+            index_file = os.path.join(local_path, "index.html")
+            if not os.path.exists(index_file):
+                self.send_error(403, "Forbidden")
+                return
+
         path_parts = clean_path.strip("/").split("/")
         if any(part.startswith(".") for part in path_parts if part):
             self.send_error(403, "Forbidden")
             return
 
-        blocked_exts = (".py", ".db", ".sqlite", ".json", ".toml", ".yaml", ".yml", ".md", ".sh", ".wal", ".shm")
-        if any(clean_path.lower().endswith(ext) for ext in blocked_exts) or ".db-" in clean_path.lower():
+        blocked_exts = (
+            ".py", ".db", ".sqlite", ".json", ".toml", ".yaml", ".yml",
+            ".md", ".sh", ".wal", ".shm", ".secret_key", ".env"
+        )
+        if (
+            any(clean_path.lower().endswith(ext) for ext in blocked_exts)
+            or ".db-" in clean_path.lower()
+            or "/.secret_key" in clean_path
+            or "/.env" in clean_path
+        ):
             self.send_error(403, "Forbidden")
             return
 
@@ -818,7 +916,7 @@ class ProforgHandler(SimpleHTTPRequestHandler):
             self._send_json(400, {"ok": False, "error": "Invalid JSON"})
             return
 
-        client_ip = self.client_address[0]
+        client_ip = self._get_client_ip()
 
         if detect_sql_injection(
             data.get("action"),
@@ -1082,6 +1180,16 @@ class ProforgHandler(SimpleHTTPRequestHandler):
                 )
                 return
 
+            if action == "admin_set_presence" and not is_voting_open():
+                self._send_json(
+                    403,
+                    {
+                        "ok": False,
+                        "error": "Подтверждение присутствия и учёт голосов заблокированы до официального открытия финала 8 декабря 2026 в 17:00 (МСК).",
+                    },
+                )
+                return
+
             with DB_LOCK, open_db() as conn:
                 cur = conn.cursor()
                 if action == "admin_set_presence":
@@ -1130,6 +1238,15 @@ class ProforgHandler(SimpleHTTPRequestHandler):
 
         # 4. ГОЛОСОВАНИЕ ПО КНОПКЕ ОТКЛЮЧЕНО (ГОЛОС ПРИНИМАЕТСЯ ПРИ РЕГИСТРАЦИИ И АВТОРИЗУЕТСЯ АДМИНОМ)
         if action == "vote":
+            if not is_voting_open():
+                self._send_json(
+                    403,
+                    {
+                        "ok": False,
+                        "error": "Голосование закрыто до 8 декабря 2026 года, 17:00 (МСК).",
+                    },
+                )
+                return
             self._send_json(
                 400,
                 {

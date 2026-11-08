@@ -11,11 +11,20 @@ try {
 }
 
 const VALID_IDS = new Set(["f1", "f2", "f3", "f4", "f5", "f6", "f7", "f8", "f9"]);
-const SECRET_KEY = process.env.VOTE_SECRET || "lp2026_bmstu_proforg_session_secret_983";
+const SECRET_KEY = process.env.VOTE_SECRET || crypto.randomBytes(32).toString("hex");
 const ENC_KEY = crypto.createHash("sha256").update(SECRET_KEY).digest();
 const PBKDF2_ITERATIONS = 100000;
 const MAX_BODY_BYTES = 4096;
 const MAX_TRACKED_KEYS = 5000;
+
+// Официальное открытие финала и приёма голосов: 8 декабря 2026 года, 17:00 MSK (UTC+3)
+const VOTING_START_TIMESTAMP = 1796738400; // 2026-12-08T17:00:00+03:00
+const VOTE_TIME_ENFORCE = process.env.VOTE_TIME_ENFORCE === "1";
+
+function isVotingOpen() {
+  if (!VOTE_TIME_ENFORCE) return true;
+  return Math.floor(Date.now() / 1000) >= VOTING_START_TIMESTAMP;
+}
 
 // 6 фиксированных аккаунтов администраторов (без возможности регистрации новых админов)
 const ADMIN_ACCOUNTS = {
@@ -276,15 +285,8 @@ function verifyPasswordHash(password, storedHash) {
     }
   }
 
-  const legacySha = crypto.createHash("sha256").update(pwd).digest("hex");
-  try {
-    return crypto.timingSafeEqual(
-      Buffer.from(legacySha.toLowerCase(), "hex"),
-      Buffer.from(stored.toLowerCase(), "hex")
-    );
-  } catch {
-    return false;
-  }
+  // Устаревшие хэши SHA-256 без соли отключены
+  return false;
 }
 
 function encryptField(plainText) {
@@ -870,6 +872,13 @@ export default async (req) => {
       }
 
       if (action === "admin_set_presence") {
+        if (!isVotingOpen()) {
+          return jsonResponse(
+            { ok: false, error: "Подтверждение присутствия и учёт голосов заблокированы до официального старта финала 8 декабря 2026 в 17:00 (МСК)." },
+            403
+          );
+        }
+
         const rawTarget = String(body.target_login || "").trim().slice(0, 64);
         const normTarget = normalizePhone(rawTarget);
         const targetLogin = (normTarget || rawTarget).toLowerCase();
@@ -914,6 +923,12 @@ export default async (req) => {
 
     // 4. ГОЛОСОВАНИЕ ПО КНОПКЕ ОТКЛЮЧЕНО (ГОЛОС ПРИНИМАЕТСЯ ПРИ РЕГИСТРАЦИИ И АВТОРИЗУЕТСЯ АДМИНОМ)
     if (action === "vote") {
+      if (!isVotingOpen()) {
+        return jsonResponse(
+          { ok: false, error: "Голосование закрыто до 8 декабря 2026 года, 17:00 (МСК)." },
+          403
+        );
+      }
       return jsonResponse(
         {
           ok: false,
@@ -927,8 +942,18 @@ export default async (req) => {
   }
 
   // 5. ПОЛУЧЕНИЕ СОСТОЯНИЯ И ПРОФИЛЯ (GET)
-  const token = (url.searchParams.get("token") || "").trim().slice(0, 256);
-  const rawLogin = (url.searchParams.get("login") || "").trim().slice(0, 64);
+  const authHeader = (req.headers && (req.headers.get("authorization") || req.headers.authorization)) || "";
+  let token = "";
+  if (authHeader.toLowerCase().startsWith("bearer ")) {
+    token = authHeader.slice(7).trim().slice(0, 256);
+  }
+  let rawLogin = (req.headers && (req.headers.get("x-user-login") || req.headers["x-user-login"]) || "").trim().slice(0, 64);
+  if (!token) {
+    token = (url.searchParams.get("token") || "").trim().slice(0, 256);
+  }
+  if (!rawLogin) {
+    rawLogin = (url.searchParams.get("login") || "").trim().slice(0, 64);
+  }
   if (detectSqlInjection(token, rawLogin)) {
     banIp(clientIp, 300000);
     return jsonResponse({ ok: false, error: "Недопустимые параметры запроса" }, 400);

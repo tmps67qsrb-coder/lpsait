@@ -5,5 +5,7 @@ __pycache__/
 *.db-wal
 *.db-shm
 *.db-journal
+.secret_key
+.env
 music[0-9]*.mp3
 music.*.mp3
