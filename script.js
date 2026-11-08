@@ -1529,7 +1529,7 @@ document.querySelectorAll(".faq__item").forEach((item) => {
   // единый непрерывный S-образный млечный путь (stardust), 3D гранёные звёзды, туманность, орбиты, метеоры
   const sections = document.querySelectorAll(".section, .footer");
   sections.forEach((sec, idx) => {
-    const isAlt = idx % 2 === 0; // Hero заканчивается слева внизу (x=180), поэтому чётные секции (idx 0, 2, 4, 6) идут слева направо (180 -> 1260), а нечётные (idx 1, 3, 5, 7) — справа налево (1260 -> 180)
+    const isAlt = idx % 2 === 1; // Hero начинается слева вверху (x=180), плавно огибает заголовок и выходит справа внизу (x=1260). Поэтому секция 0 (#about) продолжает шлейф справа налево (1260 -> 180), секция 1 — слева направо (180 -> 1260) и так далее по всему сайту.
     const curveId = isAlt ? "#stardustCurveAlt" : "#stardustCurve";
     const dashId = isAlt ? "#stardustDashAlt" : "#stardustDash";
     const starsMarkup = isAlt

@@ -237,7 +237,7 @@
       </g>
     </svg>
 
-    <!-- Звёздный S-образный шлейф (единая непрерывная линия через весь сайт) -->
+    <!-- Звёздный S-образный шлейф (единая непрерывная линия через весь сайт, огибающая надпись на главной) -->
     <svg class="hero__stardust fade-in" viewBox="0 0 1440 960" preserveAspectRatio="none" aria-hidden="true">
       <defs>
         <linearGradient id="stardustHeroGrad" x1="0" y1="0" x2="0" y2="1">
@@ -247,6 +247,10 @@
           <stop offset=".75" stop-color="#9fe0ff" stop-opacity=".9"/>
           <stop offset="1" stop-color="#7fd4ff" stop-opacity=".85"/>
         </linearGradient>
+        <!-- Траектория для главной страницы: идёт слева и плавно огибает заголовок -->
+        <path id="stardustHeroCurve" d="M180 0 C180 300 280 480 660 510 C1040 540 1260 660 1260 960"/>
+        <path id="stardustHeroDash" d="M204 0 C204 300 304 480 684 526 C1064 556 1284 660 1284 960"/>
+        <!-- Базовые траектории для непрерывного перехода сквозь все секции сайта -->
         <path id="stardustCurve" d="M1260 0 C1260 220 880 300 560 460 C240 620 180 740 180 960"/>
         <path id="stardustCurveAlt" d="M180 0 C180 220 560 300 880 460 C1200 620 1260 740 1260 960"/>
         <path id="stardustDash" d="M1284 0 C1284 220 904 300 584 460 C264 620 204 740 204 960"/>
@@ -254,23 +258,24 @@
       </defs>
       <!-- Многослойное мягкое свечение без резких границ в любом браузере -->
       <g fill="none" stroke="url(#stardustHeroGrad)" stroke-linecap="round">
-        <use href="#stardustCurve" stroke-width="62" stroke-opacity=".018"/>
-        <use href="#stardustCurve" stroke-width="44" stroke-opacity=".026"/>
-        <use href="#stardustCurve" stroke-width="30" stroke-opacity=".035"/>
-        <use href="#stardustCurve" stroke-width="20" stroke-opacity=".048"/>
-        <use href="#stardustCurve" stroke-width="12" stroke-opacity=".065"/>
-        <use href="#stardustCurve" stroke-width="6" stroke-opacity=".095"/>
-        <use href="#stardustCurve" stroke-width="3" stroke-opacity=".14"/>
-        <use href="#stardustCurve" stroke-width="1.4" stroke-opacity=".48"/>
+        <use href="#stardustHeroCurve" stroke-width="62" stroke-opacity=".018"/>
+        <use href="#stardustHeroCurve" stroke-width="44" stroke-opacity=".026"/>
+        <use href="#stardustHeroCurve" stroke-width="30" stroke-opacity=".035"/>
+        <use href="#stardustHeroCurve" stroke-width="20" stroke-opacity=".048"/>
+        <use href="#stardustHeroCurve" stroke-width="12" stroke-opacity=".065"/>
+        <use href="#stardustHeroCurve" stroke-width="6" stroke-opacity=".095"/>
+        <use href="#stardustHeroCurve" stroke-width="3" stroke-opacity=".14"/>
+        <use href="#stardustHeroCurve" stroke-width="1.4" stroke-opacity=".48"/>
       </g>
-      <use href="#stardustDash" fill="none" stroke="#8ce0ff" stroke-width="1" stroke-dasharray="2 14" stroke-linecap="round" opacity=".5"/>
+      <use href="#stardustHeroDash" fill="none" stroke="#8ce0ff" stroke-width="1" stroke-dasharray="2 14" stroke-linecap="round" opacity=".5"/>
       <g fill="#ffffff">
-        <circle cx="1216" cy="143" r="2.4" opacity=".88"/>
-        <circle cx="950" cy="263" r="2.7" opacity=".92"/>
-        <circle cx="695" cy="383" r="2.0" opacity=".82"/>
-        <circle cx="425" cy="537" r="2.5" opacity=".88"/>
-        <circle cx="266" cy="675" r="2.8" opacity=".92"/>
-        <circle cx="196" cy="817" r="2.2" opacity=".85"/>
+        <circle cx="202" cy="202" r="2.4" opacity=".88"/>
+        <circle cx="301" cy="381" r="2.7" opacity=".92"/>
+        <circle cx="507" cy="486" r="2.2" opacity=".85"/>
+        <circle cx="820" cy="530" r="2.6" opacity=".92"/>
+        <circle cx="1070" cy="613" r="2.0" opacity=".82"/>
+        <circle cx="1220" cy="767" r="2.5" opacity=".88"/>
+        <circle cx="1256" cy="891" r="2.2" opacity=".85"/>
       </g>
     </svg>
 
@@ -1455,6 +1460,6 @@
     </div>
   </div>
 
-  <script src="script.js?v=59"></script>
+  <script src="script.js?v=60"></script>
 </body>
 </html>
