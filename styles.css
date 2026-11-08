@@ -1502,8 +1502,9 @@ b { color: var(--cream); font-weight: 600; }
 }
 .poster-sheet__logo-ibm {
   height: 38px !important;
-  -webkit-filter: url(#ibmWhiteLogo);
-  filter: url(#ibmWhiteLogo);
+  width: auto;
+  object-fit: contain;
+  opacity: 0.96;
 }
 .poster-sheet__title {
   display: flex;
