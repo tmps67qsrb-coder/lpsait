@@ -122,11 +122,23 @@ const ALLY = [
 })();
 
 // ---------- Личный кабинет и секция «Голосование» (Обязательная регистрация: 1 аккаунт = 1 голос) ----------
-const VOTE_OPEN_AT = new Date("2026-12-08T16:30:00+03:00").getTime();
+const VOTE_OPEN_AT = new Date("2026-12-08T17:00:00+03:00").getTime();
 const LS_AUTH = "lp26_auth_user";
 const LS_VOTES_BY_USER = "lp26_votes_by_user_v2";
 const LS_COUNTS = "lp26_counts_v2";
 const LS_LOCAL_PROFILES = "lp26_local_profiles";
+
+const SUPPORTER_TO_CANDIDATE = {
+  "Гузько Никита Андреевич": "f1",
+  "Аксенова Алевтина Александровна": "f2",
+  "Загирова Алина Тимуровна": "f3",
+  "Щетанова Полина Денисовна": "f4",
+  "Амиров Руслан Рустемович": "f5",
+  "Кузьмичев Максим Олегович": "f6",
+  "Шумилина Екатерина Владимировна": "f7",
+  "Портузенков Ильяс Рафаэлевич": "f8",
+  "Данилина Дарья Алексеевна": "f9",
+};
 
 try {
   localStorage.removeItem("lp26_votes_by_user");
@@ -439,7 +451,14 @@ function setMyVoteForUser(login, candidateId) {
   writeJSON(LS_VOTES_BY_USER, map);
 }
 
-const myVote = () => (currentUser ? getMyVoteForUser(currentUser.login) : null);
+const myVote = () => {
+  if (!currentUser) return null;
+  const prof = currentUser.profile;
+  const supp = prof && prof.supporterOf;
+  const cid = (prof && prof.candidateId) || (supp && SUPPORTER_TO_CANDIDATE[supp]) || null;
+  if (!cid) return null;
+  return { id: cid, confirmed: Boolean(prof && prof.present) };
+};
 const localCounts = () => readJSON(LS_COUNTS, {});
 const displayName = (f, i) => [f.name, f.surname].filter(Boolean).join(" ").trim() || "Участник " + (i + 1);
 
@@ -460,9 +479,16 @@ function updateAuthUI() {
     voteOpenCabinetBtn.textContent = adminMode ? "Панель админа" : "Профиль";
   }
   if (voteUserSubNote) {
-    voteUserSubNote.textContent = adminMode
-      ? "Панель администратора: подтверждение присутствия участников и допуск к голосованию"
-      : "В личном кабинете скоро появятся лист рассадки и данные о входе в БЗДК";
+    if (adminMode) {
+      voteUserSubNote.textContent = "Панель администратора: подтверждение присутствия зрителей и авторизация голосов";
+    } else if (presentOk) {
+      const isSpectator = !prof.supporterOf || prof.supporterOf === "Просто зритель";
+      voteUserSubNote.textContent = isSpectator
+        ? "Присутствие в БЗДК подтверждено · Статус: просто зритель"
+        : `Присутствие в БЗДК подтверждено · Ваш голос зачтён за: ${prof.supporterOf}`;
+    } else {
+      voteUserSubNote.textContent = "В личном кабинете скоро появятся лист рассадки и данные о входе в БЗДК";
+    }
   }
 
   // Плашка ожидания подтверждения присутствия от админа (показывается зарегистрированному зрителю, пока админ его не отметил)
@@ -506,25 +532,28 @@ function updateAuthUI() {
       cabProfilePresence.classList.toggle("cabinet-profile__val--wait", !presentOk);
     }
     if (cabProfileVote) {
-      const my = myVote();
-      if (my && my.id) {
-        const chosenFin = FINALISTS.find((f) => f.id === my.id);
-        cabProfileVote.textContent = chosenFin
-          ? `Голос отдан: ${chosenFin.name}`
-          : "Голос учтён";
-      } else if (!presentOk) {
-        cabProfileVote.textContent = "Откроется после подтверждения присутствия админом";
-      } else if (voteIsOpen()) {
-        cabProfileVote.textContent = "Голосование открыто — выберите кандидата";
+      const isSpectator = !prof.supporterOf || prof.supporterOf === "Просто зритель";
+      if (isSpectator) {
+        cabProfileVote.textContent = presentOk
+          ? "Присутствие подтверждено (статус: просто зритель)"
+          : "Статус: просто зритель (ожидает отметки в БЗДК)";
+        cabProfileVote.classList.toggle("cabinet-profile__val--ok", presentOk);
+        cabProfileVote.classList.toggle("cabinet-profile__val--wait", !presentOk);
+      } else if (presentOk) {
+        cabProfileVote.textContent = `Голос учтён и подтверждён: ${prof.supporterOf}`;
+        cabProfileVote.classList.add("cabinet-profile__val--ok");
+        cabProfileVote.classList.remove("cabinet-profile__val--wait");
       } else {
-        cabProfileVote.textContent = "Голосование откроется 8 декабря в 16:30";
+        cabProfileVote.textContent = `Ожидает отметки в БЗДК (голос за: ${prof.supporterOf})`;
+        cabProfileVote.classList.remove("cabinet-profile__val--ok");
+        cabProfileVote.classList.add("cabinet-profile__val--wait");
       }
     }
   }
 
-  // Право на голосование даёт ТОЛЬКО регистрация + подтверждение присутствия от администратора
+  // Таблица статистики результатов отображается при открытии голосования
   if (voteGrid) {
-    voteGrid.hidden = !(voteIsOpen() && loggedIn && !adminMode && presentOk);
+    voteGrid.hidden = !voteIsOpen();
   }
 }
 
@@ -568,7 +597,9 @@ function renderAdminPanel() {
 
   const totalCount = users.length;
   const presentCount = users.filter((u) => u.present).length;
-  const votedCount = users.filter((u) => u.hasVoted).length;
+  const votedCount = users.filter(
+    (u) => Boolean(u.present) && u.supporterOf && u.supporterOf !== "Просто зритель"
+  ).length;
 
   if (adminStatTotal) adminStatTotal.textContent = String(totalCount);
   if (adminStatPresent) adminStatPresent.textContent = String(presentCount);
@@ -629,16 +660,18 @@ function renderAdminPanel() {
   const nextHtml = filtered
     .map((u) => {
       const present = Boolean(u.present);
-      const voted = Boolean(u.hasVoted);
+      const isSpectator = !u.supporterOf || u.supporterOf === "Просто зритель";
       const uidLabel = escapeHtml(u.userId || "—");
       const statusBadge = present
         ? `<span class="admin-badge admin-badge--ok">Присутствие подтверждено${
             u.verifiedBy ? " (" + escapeHtml(u.verifiedBy) + ")" : ""
           }</span>`
         : `<span class="admin-badge admin-badge--wait">Ожидает подтверждения</span>`;
-      const votedBadge = voted
-        ? `<span class="admin-badge admin-badge--voted">Уже проголосовал</span>`
-        : "";
+      const votedBadge = isSpectator
+        ? `<span class="admin-badge">Просто зритель</span>`
+        : present
+        ? `<span class="admin-badge admin-badge--voted">Голос зачтён: ${escapeHtml(u.supporterOf)}</span>`
+        : `<span class="admin-badge admin-badge--wait">Голос: ${escapeHtml(u.supporterOf)} (ждёт отметки)</span>`;
       const btnText = present ? "Снять отметку" : "Подтвердить присутствие";
       const btnClass = "admin-presence-btn" + (present ? " is-revoke" : "");
 
@@ -747,7 +780,16 @@ async function setAdminPresence(targetLogin, present) {
       localProfiles[targetLogin].verifiedBy = present ? currentUser.login : "";
       writeJSON(LS_LOCAL_PROFILES, localProfiles);
     }
+    const counts = { f1: 0, f2: 0, f3: 0, f4: 0, f5: 0, f6: 0, f7: 0, f8: 0, f9: 0 };
+    Object.values(localProfiles).forEach((u) => {
+      const cid = u.candidateId || SUPPORTER_TO_CANDIDATE[u.supporterOf];
+      if (u.present && cid && counts[cid] !== undefined) {
+        counts[cid]++;
+      }
+    });
+    writeJSON(LS_COUNTS, counts);
     await fetchAdminUsers();
+    renderVoteCards();
     return;
   }
 
@@ -772,6 +814,10 @@ async function setAdminPresence(targetLogin, present) {
     }
     if (Array.isArray(data.users)) {
       adminUsersCache = data.users;
+    }
+    if (data.counts && typeof data.counts === "object") {
+      writeJSON(LS_COUNTS, data.counts);
+      renderVoteCards();
     }
     renderAdminPanel();
   } catch {
@@ -798,7 +844,6 @@ adminFilterBtns.forEach((btn) => {
 });
 
 function renderVoteCards() {
-  const loggedIn = isLoggedIn();
   const presentOk = isUserPresent();
   const my = myVote();
   const counts = localCounts();
@@ -809,29 +854,22 @@ function renderVoteCards() {
     const fullName = displayName(f, i);
     const groupHtml = f.group ? `<small class="alley-card__group">${f.group}</small>` : "";
     const card = document.createElement("article");
-    card.className = "alley-card vote-card" + (chosen ? " is-chosen" : "");
-    const votesBlock = my
-      ? `<p class="vote-card__votes"><b data-votes="${f.id}">${total}</b><small>голосов</small></p>`
-      : "";
-    const btnLabel = chosen
-      ? "Ваш голос"
-      : !loggedIn
-      ? "Войти и голосовать"
-      : !presentOk
-      ? "Нужна отметка админа"
-      : "Голосовать";
+    const cardChosenClass = chosen ? (presentOk ? " is-chosen" : " is-pending-choice") : "";
+    card.className = "alley-card vote-card" + cardChosenClass;
+    const votesBlock = `<p class="vote-card__votes"><b data-votes="${f.id}">${total}</b><small>голосов</small></p>`;
+    let choiceBadge = "";
+    if (chosen) {
+      choiceBadge = presentOk
+        ? `<div class="vote-card__badge vote-card__badge--ok">✓ Ваш подтверждённый голос</div>`
+        : `<div class="vote-card__badge vote-card__badge--wait">Ваш выбор (ждёт отметки в БЗДК)</div>`;
+    }
     card.innerHTML = `
       <span class="alley-card__photo vote-card__photo">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 0C13.1 6.9 17.1 10.9 24 12C17.1 13.1 13.1 17.1 12 24C10.9 17.1 6.9 13.1 0 12C6.9 10.9 10.9 6.9 12 0Z"/></svg>
       </span>
       <p class="alley-card__name vote-card__name"><span>${fullName}</span>${groupHtml}</p>
       ${votesBlock}
-      <button class="btn-frame" type="button" data-id="${f.id}" ${my || votingInProgress || !presentOk ? "disabled" : ""}>
-        <svg class="btn-frame__svg" viewBox="0 0 320 94" preserveAspectRatio="none" aria-hidden="true">
-          <path d="M6 47 C 30 40 44 24 50 8 L 270 8 C 276 24 290 40 314 47 C 290 54 276 70 270 86 L 50 86 C 44 70 30 54 6 47 Z" fill="none" stroke="url(#frameGrad)" stroke-width="1.6" vector-effect="non-scaling-stroke"/>
-        </svg>
-        <span>${btnLabel}</span>
-      </button>`;
+      ${choiceBadge}`;
     if (f.photo) {
       const img = new Image();
       img.alt = [fullName, f.group].filter(Boolean).join(", ") || `Участник ${i + 1}`;
@@ -842,8 +880,6 @@ function renderVoteCards() {
       };
       img.src = f.photo;
     }
-    const btn = card.querySelector("button");
-    btn.addEventListener("click", () => voteFor(f.id));
     voteGrid.appendChild(card);
   });
 }
@@ -1038,8 +1074,10 @@ if (cabinetRegForm) {
         return;
       }
       const userId = generateLocalUserId(phone, localProfiles);
+      const candId = SUPPORTER_TO_CANDIDATE[supporterOf] || "";
       const profile = {
         userId,
+        candidateId: candId,
         phone,
         fullName,
         group: groupVal,
@@ -1290,20 +1328,17 @@ async function voteFor(id) {
 let voteStateShown = null;
 function refreshVote() {
   const open = voteIsOpen();
-  const loggedIn = isLoggedIn();
-  const adminMode = isAdminUser();
-  const presentOk = isUserPresent();
   if (open !== voteStateShown) {
     voteStateShown = open;
     voteLocked.hidden = open;
     if (voteAuth) voteAuth.hidden = false;
     voteSub.textContent = open
-      ? "Выбери лучшего профорга МГТУ — регистрация + подтверждение присутствия в БЗДК"
-      : "Зарегистрируйтесь заранее — голосование откроется во время финала после подтверждения присутствия";
+      ? "Таблица результатов — голоса подтверждённых участников в БЗДК"
+      : "Зарегистрируйтесь заранее — результаты голосования откроются во время финала 8 декабря в 17:00";
     if (open) syncVotesFromServer();
   }
   if (voteGrid) {
-    voteGrid.hidden = !(open && loggedIn && !adminMode && presentOk);
+    voteGrid.hidden = !open;
   }
   if (!open) {
     const left = Math.max(0, VOTE_OPEN_AT - Date.now());

@@ -46,6 +46,18 @@ const VALID_SUPPORTERS = new Set([
   "Просто зритель",
 ]);
 
+const SUPPORTER_TO_CANDIDATE = {
+  "Гузько Никита Андреевич": "f1",
+  "Аксенова Алевтина Александровна": "f2",
+  "Загирова Алина Тимуровна": "f3",
+  "Щетанова Полина Денисовна": "f4",
+  "Амиров Руслан Рустемович": "f5",
+  "Кузьмичев Максим Олегович": "f6",
+  "Шумилина Екатерина Владимировна": "f7",
+  "Портузенков Ильяс Рафаэлевич": "f8",
+  "Данилина Дарья Алексеевна": "f9",
+};
+
 const JSON_HEADERS = {
   "Content-Type": "application/json; charset=utf-8",
   "Cache-Control": "no-store, no-cache, must-revalidate",
@@ -496,15 +508,18 @@ async function listAllUsersForAdmin(store, forceFresh = false) {
 function formatPublicProfile(userObj) {
   if (!userObj) return null;
   const fallbackLogin = userObj.login || userObj.phone || "";
+  const supp = userObj.supporterOf || "";
+  const cid = userObj.candidateId || SUPPORTER_TO_CANDIDATE[supp] || "";
   return {
     userId: String(
       userObj.userId || (fallbackLogin ? deriveDeterministicUserId(fallbackLogin) : "")
     ),
+    candidateId: cid,
     phone: userObj.phone || userObj.login,
     fullName: userObj.fullName || "",
     group: userObj.notBmstu ? "Не из МГТУ им. Н.Э. Баумана" : userObj.group || "",
     notBmstu: Boolean(userObj.notBmstu),
-    supporterOf: userObj.supporterOf || "",
+    supporterOf: supp,
     present: Boolean(userObj.present),
     verifiedBy: String(userObj.verifiedBy || ""),
   };
@@ -663,11 +678,13 @@ export default async (req) => {
       recordAttempt(regRlKey);
 
       const userId = await allocateUniqueUserId(store, phone);
+      const candidateId = SUPPORTER_TO_CANDIDATE[supporterOf] || "";
 
       const storedRecord = {
         login: phone,
         phone,
         userId,
+        candidateId,
         fullName: encryptField(fullName),
         group: encryptField(group),
         notBmstu,
@@ -698,6 +715,7 @@ export default async (req) => {
         token,
         profile: {
           userId,
+          candidateId,
           phone,
           fullName,
           group,
@@ -706,8 +724,8 @@ export default async (req) => {
           present: false,
           verifiedBy: "",
         },
-        my_vote: null,
-        counts: null,
+        my_vote: candidateId || null,
+        counts: state.counts,
         total,
         cabinet_notice: "В личном кабинете скоро появятся лист рассадки и данные о входе в БЗДК",
       });
@@ -840,114 +858,37 @@ export default async (req) => {
         ADMIN_USERS_CACHE = { ts: 0, users: null };
       }
 
-      const adminUsers = await listAllUsersForAdmin(store, action === "admin_set_presence");
-      const state = await getCachedState(store);
-      const total = Object.values(state.counts).reduce((a, b) => a + b, 0);
+      const adminUsers = await listAllUsersForAdmin(store, true);
+      const freshCounts = { f1: 0, f2: 0, f3: 0, f4: 0, f5: 0, f6: 0, f7: 0, f8: 0, f9: 0 };
+      for (const u of adminUsers) {
+        if (u.present && u.candidateId && freshCounts[u.candidateId] !== undefined) {
+          freshCounts[u.candidateId]++;
+        }
+      }
+      const state = { counts: freshCounts };
+      await store.setJSON("state", state);
+      STATE_CACHE = { ts: Date.now(), state };
+      const total = Object.values(freshCounts).reduce((a, b) => a + b, 0);
 
       return jsonResponse({
         ok: true,
         is_admin: true,
         login: authenticatedLogin,
         users: adminUsers,
-        counts: state.counts,
+        counts: freshCounts,
         total,
       });
     }
 
-    // 4. ГОЛОСОВАНИЕ (ТОЛЬКО ПРИ НАЛИЧИИ РЕГИСТРАЦИИ И ПОДТВЕРЖДЕНИЯ ПРИСУТСТВИЯ ОТ АДМИНА)
+    // 4. ГОЛОСОВАНИЕ ПО КНОПКЕ ОТКЛЮЧЕНО (ГОЛОС ПРИНИМАЕТСЯ ПРИ РЕГИСТРАЦИИ И АВТОРИЗУЕТСЯ АДМИНОМ)
     if (action === "vote") {
-      if (checkAndRecordRate(`vote:${clientIp}`, 180, 60000)) {
-        return jsonResponse(
-          { ok: false, error: "Слишком много запросов на голосование. Подождите минуту." },
-          429
-        );
-      }
-
-      const rawLogin = String(body.login || "").trim().slice(0, 64);
-      const normPhone = normalizePhone(rawLogin);
-      const expectedLogin = normPhone || rawLogin;
-      const token = String(body.token || "").trim().slice(0, 256);
-      const authenticatedLogin = verifyToken(token);
-
-      if (!authenticatedLogin || authenticatedLogin.toLowerCase() !== expectedLogin.toLowerCase()) {
-        return jsonResponse(
-          { ok: false, error: "Сессия истекла или недействительна. Войдите в личный кабинет." },
-          401
-        );
-      }
-
-      if (checkAndRecordRate(`vote_user:${authenticatedLogin}`, 10, 60000)) {
-        return jsonResponse(
-          { ok: false, error: "Слишком много попыток голосования. Подождите минуту." },
-          429
-        );
-      }
-
-      if (Object.prototype.hasOwnProperty.call(ADMIN_ACCOUNTS, authenticatedLogin)) {
-        return jsonResponse(
-          {
-            ok: false,
-            error: "Аккаунты администраторов предназначены для подтверждения присутствия и не участвуют в голосовании.",
-          },
-          403
-        );
-      }
-
-      const candidateId = String(body.id || "").trim();
-      if (!VALID_IDS.has(candidateId)) {
-        return jsonResponse(
-          { ok: false, error: "Некорректный кандидат" },
-          400
-        );
-      }
-
-      const userAccount = await findUserAccount(store, authenticatedLogin);
-      if (!userAccount || !userAccount.present) {
-        return jsonResponse(
-          {
-            ok: false,
-            error: "Право на голосование открывается только после подтверждения вашего присутствия администратором в БЗДК.",
-          },
-          403
-        );
-      }
-
-      const voterKey = `voter:${authenticatedLogin}`;
-      const existingVote = await store.get(voterKey, { type: "json" });
-      const state = await getCachedState(store, true);
-
-      if (existingVote) {
-        return jsonResponse(
-          {
-            ok: false,
-            error: "Вы уже голосовали в этом конкурсе",
-            my_vote: existingVote.candidateId,
-            counts: state.counts,
-          },
-          409
-        );
-      }
-
-      await store.setJSON(voterKey, {
-        candidateId,
-        ts: Date.now(),
-      });
-
-      state.counts[candidateId] = (state.counts[candidateId] || 0) + 1;
-      await store.setJSON("state", state);
-      STATE_CACHE = { ts: Date.now(), state };
-      ADMIN_USERS_CACHE = { ts: 0, users: null };
-
-      const total = Object.values(state.counts).reduce((a, b) => a + b, 0);
-
-      return jsonResponse({
-        ok: true,
-        login: authenticatedLogin,
-        token,
-        my_vote: candidateId,
-        counts: state.counts,
-        total,
-      });
+      return jsonResponse(
+        {
+          ok: false,
+          error: "Голосование по кнопке отключено. Ваш голос принимается при регистрации за выбранного кандидата и учитывается после подтверждения присутствия администратором в БЗДК.",
+        },
+        400
+      );
     }
 
     return jsonResponse({ ok: false, error: "Неизвестное действие" }, 400);
@@ -986,17 +927,16 @@ export default async (req) => {
       };
       adminUsers = await listAllUsersForAdmin(store);
     } else {
-      const voterData = await store.get(`voter:${authenticatedLogin}`, { type: "json" });
-      myVote = voterData ? voterData.candidateId : null;
       const userAccount = await findUserAccount(store, authenticatedLogin);
       profile = formatPublicProfile(userAccount);
+      myVote = (profile && profile.candidateId) || null;
     }
   }
 
   const total = Object.values(state.counts).reduce((a, b) => a + b, 0);
 
   return jsonResponse({
-    counts: myVote || isAdmin ? state.counts : null,
+    counts: state.counts,
     my_vote: myVote,
     total,
     login: authenticatedLogin || null,

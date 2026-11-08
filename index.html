@@ -10,7 +10,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&family=Viaoda+Libre&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css?v=58">
+  <link rel="stylesheet" href="styles.css?v=59">
 </head>
 <body>
 
@@ -1087,7 +1087,7 @@
           <path d="M8 10.5V7.5a4 4 0 0 1 8 0v3"/>
           <circle cx="12" cy="15.5" r="1.6" fill="currentColor" stroke="none"/>
         </svg>
-        <p class="vote-locked__text">Голосование откроется <b>8 декабря в 16:30</b> — во время финала</p>
+        <p class="vote-locked__text">Голосование откроется <b>8 декабря в 17:00</b> — во время финала</p>
         <div class="countdown__grid vote-locked__timer">
           <div class="countdown__cell"><span id="vd-days">--</span><small>дней</small></div>
           <div class="countdown__cell"><span id="vd-hours">--</span><small>часов</small></div>
@@ -1100,8 +1100,8 @@
       <!-- Авторизация для голосования (обязательная регистрация, 1 аккаунт = 1 голос) -->
       <div class="vote-auth" id="voteAuth" hidden>
         <div class="vote-auth__form-wrap" id="voteAuthFormWrap">
-          <p class="vote-auth__title">Личный кабинет участника голосования</p>
-          <p class="vote-auth__sub">Для доступа к голосованию необходима обязательная регистрация. 1 аккаунт (номер телефона) = 1 голос.</p>
+          <p class="vote-auth__title">Личный кабинет зрителя</p>
+          <p class="vote-auth__sub">Голос отдаётся за выбранного при регистрации финалиста и учитывается в статистике после подтверждения вашего присутствия в БЗДК. 1 аккаунт = 1 голос.</p>
           <div class="vote-auth__actions">
             <button class="btn-frame vote-auth__submit" type="button" id="voteOpenRegBtn">
               <svg class="btn-frame__svg" viewBox="0 0 320 94" preserveAspectRatio="none" aria-hidden="true">
@@ -1133,7 +1133,7 @@
           </svg>
           <div class="vote-presence-wait__body">
             <p class="vote-presence-wait__title">Ожидается подтверждение вашего присутствия от администратора</p>
-            <p class="vote-presence-wait__sub">Право на голосование открывается после регистрации и подтверждения вашего присутствия администратором в БЗДК. Подойдите к стойке организаторов и назовите ваш 4-значный ID или ФИО — после отметки голосование откроется автоматически.</p>
+            <p class="vote-presence-wait__sub">Ваш голос за выбранного финалиста будет добавлен в общую статистику сразу после подтверждения вашего присутствия администратором в БЗДК. Подойдите к стойке организаторов и назовите ваш 4-значный ID или ФИО.</p>
           </div>
         </div>
       </div>
@@ -1376,7 +1376,7 @@
             <svg class="btn-frame__svg" viewBox="0 0 320 94" preserveAspectRatio="none" aria-hidden="true">
               <path d="M6 47 C 30 40 44 24 50 8 L 270 8 C 276 24 290 40 314 47 C 290 54 276 70 270 86 L 50 86 C 44 70 30 54 6 47 Z" fill="none" stroke="url(#frameGrad)" stroke-width="1.6" vector-effect="non-scaling-stroke"/>
             </svg>
-            <span>К голосованию</span>
+            <span>К таблице результатов</span>
           </a>
           <button class="vote-auth__logout" type="button" id="cabLogoutBtn">Выйти из аккаунта</button>
         </div>
@@ -1455,6 +1455,6 @@
     </div>
   </div>
 
-  <script src="script.js?v=58"></script>
+  <script src="script.js?v=59"></script>
 </body>
 </html>

@@ -62,6 +62,18 @@ VALID_SUPPORTERS = {
     "Просто зритель",
 }
 
+SUPPORTER_TO_CANDIDATE = {
+    "Гузько Никита Андреевич": "f1",
+    "Аксенова Алевтина Александровна": "f2",
+    "Загирова Алина Тимуровна": "f3",
+    "Щетанова Полина Денисовна": "f4",
+    "Амиров Руслан Рустемович": "f5",
+    "Кузьмичев Максим Олегович": "f6",
+    "Шумилина Екатерина Владимировна": "f7",
+    "Портузенков Ильяс Рафаэлевич": "f8",
+    "Данилина Дарья Алексеевна": "f9",
+}
+
 CABINET_NOTICE = "В личном кабинете скоро появятся лист рассадки и данные о входе в БЗДК"
 
 # ============================================================
@@ -394,6 +406,7 @@ def init_db():
             CREATE TABLE IF NOT EXISTS users (
                 login TEXT PRIMARY KEY,
                 user_id TEXT DEFAULT '',
+                candidate_id TEXT DEFAULT '',
                 password_hash TEXT NOT NULL,
                 full_name TEXT DEFAULT '',
                 study_group TEXT DEFAULT '',
@@ -407,6 +420,7 @@ def init_db():
         )
         for col_sql in (
             "ALTER TABLE users ADD COLUMN user_id TEXT DEFAULT ''",
+            "ALTER TABLE users ADD COLUMN candidate_id TEXT DEFAULT ''",
             "ALTER TABLE users ADD COLUMN full_name TEXT DEFAULT ''",
             "ALTER TABLE users ADD COLUMN study_group TEXT DEFAULT ''",
             "ALTER TABLE users ADD COLUMN not_bmstu INTEGER DEFAULT 0",
@@ -427,7 +441,17 @@ def init_db():
         for (lg,) in empty_rows:
             uid = generate_unique_user_id(cur, lg)
             cur.execute("UPDATE users SET user_id = ? WHERE login = ?", (uid, lg))
-        if empty_rows:
+
+        empty_cands = cur.execute(
+            "SELECT login, supporter_of FROM users WHERE candidate_id IS NULL OR candidate_id = ''"
+        ).fetchall()
+        for lg, enc_supp in empty_cands:
+            supp = decrypt_field(enc_supp)
+            cid = SUPPORTER_TO_CANDIDATE.get(supp, "")
+            if cid:
+                cur.execute("UPDATE users SET candidate_id = ? WHERE login = ?", (cid, lg))
+
+        if empty_rows or empty_cands:
             conn.commit()
 
         conn.execute(
@@ -447,6 +471,9 @@ def init_db():
         conn.execute(
             "CREATE INDEX IF NOT EXISTS idx_votes_candidate ON votes(candidate_id)"
         )
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_users_cand_pres ON users(candidate_id, present)"
+        )
         sync_users_from_json(conn)
 
 
@@ -458,7 +485,7 @@ def get_user_profile(cur: sqlite3.Cursor, login_key: str):
         return None
     row = cur.execute(
         """
-        SELECT login, password_hash, full_name, study_group, not_bmstu, supporter_of, present, verified_by, created_at, user_id
+        SELECT login, password_hash, full_name, study_group, not_bmstu, supporter_of, present, verified_by, created_at, user_id, candidate_id
         FROM users WHERE login = ? LIMIT 1
         """,
         (clean_login,),
@@ -475,11 +502,13 @@ def get_user_profile(cur: sqlite3.Cursor, login_key: str):
     if not user_id or not user_id.isdigit() or len(user_id) != 4:
         user_id = generate_unique_user_id(cur, clean_login)
         cur.execute("UPDATE users SET user_id = ? WHERE login = ?", (user_id, clean_login))
+    cand_id = str(row[10] or "").strip() or SUPPORTER_TO_CANDIDATE.get(dec_supporter, "")
     return {
         "login": row[0],
         "password_hash": row[1],
         "profile": {
             "userId": user_id,
+            "candidateId": cand_id,
             "phone": row[0],
             "fullName": dec_name,
             "group": "Не из МГТУ им. Н.Э. Баумана" if not_bmstu_flag else dec_group,
@@ -492,13 +521,9 @@ def get_user_profile(cur: sqlite3.Cursor, login_key: str):
 
 
 def list_all_users_for_admin(cur: sqlite3.Cursor) -> list:
-    voted_devices = {
-        r[0]: r[1]
-        for r in cur.execute("SELECT device_id, candidate_id FROM votes").fetchall()
-    }
     rows = cur.execute(
         """
-        SELECT login, full_name, study_group, not_bmstu, supporter_of, present, verified_by, created_at, user_id
+        SELECT login, full_name, study_group, not_bmstu, supporter_of, present, verified_by, created_at, user_id, candidate_id
         FROM users
         ORDER BY created_at DESC, login ASC
         """
@@ -519,19 +544,20 @@ def list_all_users_for_admin(cur: sqlite3.Cursor) -> list:
         if not user_id or not user_id.isdigit() or len(user_id) != 4:
             user_id = generate_unique_user_id(cur, login)
             cur.execute("UPDATE users SET user_id = ? WHERE login = ?", (user_id, login))
-        vote_cid = voted_devices.get(f"user:{login.lower()}")
+        cand_id = str(row[9] or "").strip() or SUPPORTER_TO_CANDIDATE.get(dec_supporter, "")
         result.append(
             {
                 "login": login,
                 "phone": login,
                 "userId": user_id,
+                "candidateId": cand_id,
                 "fullName": dec_name,
                 "group": "Не из МГТУ им. Н.Э. Баумана" if not_bmstu_flag else dec_group,
                 "notBmstu": not_bmstu_flag,
                 "supporterOf": dec_supporter,
                 "present": present_flag,
                 "verifiedBy": verified_by,
-                "hasVoted": bool(vote_cid),
+                "hasVoted": bool(present_flag and cand_id),
                 "createdAt": created_at,
             }
         )
@@ -566,7 +592,12 @@ def get_all_counts(cur: sqlite3.Cursor, use_cache: bool = True):
 
     counts = {cid: 0 for cid in sorted(VALID_IDS)}
     for cid, cnt in cur.execute(
-        "SELECT candidate_id, COUNT(*) FROM votes GROUP BY candidate_id"
+        """
+        SELECT candidate_id, COUNT(*)
+        FROM users
+        WHERE present = 1 AND candidate_id IS NOT NULL AND candidate_id != ''
+        GROUP BY candidate_id
+        """
     ):
         if cid in counts:
             counts[cid] = int(cnt)
@@ -706,8 +737,8 @@ class ProforgHandler(SimpleHTTPRequestHandler):
             self._send_json(
                 200,
                 {
-                    "counts": counts if (my_vote or is_admin) else None,
-                    "my_vote": my_vote,
+                    "counts": counts,
+                    "my_vote": (profile and profile.get("candidateId")) or my_vote,
                     "total": total,
                     "login": authenticated_login,
                     "is_admin": is_admin,
@@ -858,15 +889,17 @@ class ProforgHandler(SimpleHTTPRequestHandler):
 
                 record_attempt(reg_rl_key)
                 user_id = generate_unique_user_id(cur, phone.lower())
+                cand_id = SUPPORTER_TO_CANDIDATE.get(supporter_of, "")
 
                 cur.execute(
                     """
-                    INSERT INTO users (login, user_id, password_hash, full_name, study_group, not_bmstu, supporter_of, present, verified_by, created_at)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, 0, '', ?)
+                    INSERT INTO users (login, user_id, candidate_id, password_hash, full_name, study_group, not_bmstu, supporter_of, present, verified_by, created_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, '', ?)
                     """,
                     (
                         phone.lower(),
                         user_id,
+                        cand_id,
                         pwd_hash,
                         enc_name,
                         enc_group,
@@ -876,7 +909,7 @@ class ProforgHandler(SimpleHTTPRequestHandler):
                     ),
                 )
                 conn.commit()
-                counts = get_all_counts(cur, use_cache=True)
+                counts = get_all_counts(cur, use_cache=False)
                 total = sum(counts.values())
 
             token = create_token(phone.lower())
@@ -889,6 +922,7 @@ class ProforgHandler(SimpleHTTPRequestHandler):
                     "token": token,
                     "profile": {
                         "userId": user_id,
+                        "candidateId": cand_id,
                         "phone": phone,
                         "fullName": full_name,
                         "group": study_group,
@@ -897,8 +931,8 @@ class ProforgHandler(SimpleHTTPRequestHandler):
                         "present": False,
                         "verifiedBy": "",
                     },
-                    "my_vote": None,
-                    "counts": None,
+                    "my_vote": cand_id or None,
+                    "counts": counts,
                     "total": total,
                     "cabinet_notice": CABINET_NOTICE,
                 },
@@ -1049,8 +1083,9 @@ class ProforgHandler(SimpleHTTPRequestHandler):
                         return
                     conn.commit()
 
+                COUNTS_CACHE["counts"] = None
+                counts = get_all_counts(cur, use_cache=False)
                 admin_users = list_all_users_for_admin(cur)
-                counts = get_all_counts(cur, use_cache=True)
 
             self._send_json(
                 200,
@@ -1065,125 +1100,13 @@ class ProforgHandler(SimpleHTTPRequestHandler):
             )
             return
 
-        # 4. ГОЛОСОВАНИЕ (ТОЛЬКО ПРИ НАЛИЧИИ РЕГИСТРАЦИИ И ПОДТВЕРЖДЕНИЯ ПРИСУТСТВИЯ ОТ АДМИНА)
+        # 4. ГОЛОСОВАНИЕ ПО КНОПКЕ ОТКЛЮЧЕНО (ГОЛОС ПРИНИМАЕТСЯ ПРИ РЕГИСТРАЦИИ И АВТОРИЗУЕТСЯ АДМИНОМ)
         if action == "vote":
-            vote_rl_key = f"vote:{client_ip}"
-            if check_and_record_rate(vote_rl_key, max_attempts=180, window_sec=60):
-                self._send_json(
-                    429,
-                    {"ok": False, "error": "Слишком много запросов на голосование. Подождите минуту."},
-                )
-                return
-
-            raw_login = str(data.get("login") or "").strip()[:64]
-            norm_phone = normalize_phone(raw_login)
-            expected_login = (norm_phone or raw_login).lower()
-            token = str(data.get("token") or "").strip()[:256]
-            authenticated_login = verify_token(token)
-
-            if not authenticated_login or authenticated_login != expected_login:
-                self._send_json(
-                    401,
-                    {
-                        "ok": False,
-                        "error": "Сессия истекла или недействительна. Войдите в личный кабинет.",
-                    },
-                )
-                return
-
-            if check_and_record_rate(f"vote_user:{authenticated_login}", max_attempts=10, window_sec=60):
-                self._send_json(
-                    429,
-                    {"ok": False, "error": "Слишком много попыток голосования. Подождите минуту."},
-                )
-                return
-
-            if authenticated_login in ADMIN_ACCOUNTS:
-                self._send_json(
-                    403,
-                    {"ok": False, "error": "Аккаунты администраторов предназначены для подтверждения присутствия и не участвуют в голосовании."},
-                )
-                return
-
-            candidate_id = str(data.get("id") or "").strip()
-            if candidate_id not in VALID_IDS:
-                self._send_json(400, {"ok": False, "error": "Некорректный кандидат"})
-                return
-
-            with DB_LOCK, open_db() as conn:
-                cur = conn.cursor()
-                user_obj = get_user_profile(cur, authenticated_login)
-                if not user_obj or not user_obj["profile"].get("present"):
-                    self._send_json(
-                        403,
-                        {
-                            "ok": False,
-                            "error": "Право на голосование открывается только после подтверждения вашего присутствия администратором в БЗДК.",
-                        },
-                    )
-                    return
-
-                existing_vote = find_existing_vote_by_login(cur, authenticated_login)
-                if existing_vote:
-                    counts = get_all_counts(cur, use_cache=True)
-                    self._send_json(
-                        409,
-                        {
-                            "ok": False,
-                            "error": "Вы уже голосовали в этом конкурсе",
-                            "my_vote": existing_vote,
-                            "counts": counts,
-                            "total": sum(counts.values()),
-                        },
-                    )
-                    return
-
-                try:
-                    cur.execute(
-                        """
-                        INSERT INTO votes (
-                            candidate_id, device_id, cookie_id, fp_ip_hash, ip, user_agent, created_at
-                        ) VALUES (?, ?, ?, ?, ?, ?, ?)
-                        """,
-                        (
-                            candidate_id,
-                            f"user:{authenticated_login}",
-                            f"cookie:{authenticated_login}",
-                            f"hash:{authenticated_login}",
-                            client_ip[:64],
-                            sanitize_text(self.headers.get("User-Agent", ""), 200),
-                            int(time.time()),
-                        ),
-                    )
-                    conn.commit()
-                except sqlite3.IntegrityError:
-                    existing_vote = find_existing_vote_by_login(cur, authenticated_login)
-                    counts = get_all_counts(cur, use_cache=False)
-                    self._send_json(
-                        409,
-                        {
-                            "ok": False,
-                            "error": "Вы уже голосовали в этом конкурсе",
-                            "my_vote": existing_vote,
-                            "counts": counts,
-                            "total": sum(counts.values()),
-                        },
-                    )
-                    return
-
-                my_vote = candidate_id
-                counts = get_all_counts(cur, use_cache=False)
-                total = sum(counts.values())
-
             self._send_json(
-                200,
+                400,
                 {
-                    "ok": True,
-                    "login": authenticated_login,
-                    "token": token,
-                    "my_vote": my_vote,
-                    "counts": counts,
-                    "total": total,
+                    "ok": False,
+                    "error": "Голосование по кнопке отключено. Ваш голос принимается при регистрации за выбранного кандидата и учитывается после подтверждения присутствия администратором в БЗДК.",
                 },
             )
             return

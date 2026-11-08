@@ -3123,8 +3123,12 @@ b { color: var(--cream); font-weight: 600; }
   padding: 12px 12px 18px;
 }
 .vote-card.is-chosen {
-  border-color: #ffffff;
-  box-shadow: 0 0 44px rgba(140, 224, 255, 0.28);
+  border-color: #6ee7b7;
+  box-shadow: 0 0 44px rgba(110, 231, 183, 0.35);
+}
+.vote-card.is-pending-choice {
+  border-color: #fcd34d;
+  box-shadow: 0 0 36px rgba(251, 191, 36, 0.28);
 }
 .vote-card__name {
   margin-bottom: 12px;
@@ -3153,6 +3157,32 @@ b { color: var(--cream); font-weight: 600; }
   letter-spacing: 0.12em;
   text-transform: uppercase;
   color: var(--accent);
+}
+.vote-card__badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 7px 16px;
+  border-radius: 999px;
+  font-family: var(--font-text);
+  font-size: 13.5px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  margin-top: auto;
+  text-align: center;
+}
+.vote-card__badge--ok {
+  border: 1px solid rgba(110, 231, 183, 0.75);
+  background: rgba(16, 185, 129, 0.22);
+  color: #6ee7b7;
+  box-shadow: 0 0 18px rgba(110, 231, 183, 0.4);
+}
+.vote-card__badge--wait {
+  border: 1px solid rgba(251, 191, 36, 0.65);
+  background: rgba(251, 191, 36, 0.16);
+  color: #fde68a;
+  box-shadow: 0 0 16px rgba(251, 191, 36, 0.25);
 }
 .vote-card .btn-frame {
   background: none;
