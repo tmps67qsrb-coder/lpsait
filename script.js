@@ -1734,21 +1734,28 @@ document.querySelectorAll(".faq__item").forEach((item) => {
 
   tracks.forEach((track) => {
     const hero = track.closest(".sky--hero");
-    const count = isMobile ? 56 : 120;
+    // Уменьшаем избыточную плотность белых точек по всему сайту
+    const count = hero ? (isMobile ? 32 : 54) : (isMobile ? 20 : 38);
 
     const frag = document.createDocumentFragment();
     for (let i = 0; i < count; i++) {
       const s = document.createElement("span");
       s.className = "h-star";
       const r = Math.random();
-      const size = r < 0.45 ? 1 : r < 0.78 ? 1.5 : r < 0.93 ? 2 : 2.7;
+      const isSparkle = r > 0.72; // ~28% звёздочек превращаем в маленькие 4-лучевые космические звёздочки
+      const size = isSparkle
+        ? (r > 0.88 ? 6 : 4.5)
+        : (r < 0.4 ? 1 : r < 0.72 ? 1.5 : 2);
       s.style.width = s.style.height = size + "px";
       s.style.left = (Math.random() * 50).toFixed(3) + "%";
       s.style.top = (Math.random() * 100).toFixed(3) + "%";
       s.style.setProperty("--d", (2.2 + Math.random() * 4).toFixed(2) + "s");
       s.style.setProperty("--dl", (-Math.random() * 6).toFixed(2) + "s");
-      s.style.setProperty("--o", (0.4 + Math.random() * 0.55).toFixed(2));
-      if (size >= 2) {
+      s.style.setProperty("--o", (0.35 + Math.random() * 0.55).toFixed(2));
+      if (isSparkle) {
+        s.classList.add("h-star--sparkle");
+        s.style.setProperty("--star-c", Math.random() < 0.5 ? "#8ce0ff" : "#ffffff");
+      } else if (size >= 2) {
         s.classList.add("h-star--glow");
         s.style.setProperty("--star-c", Math.random() < 0.5 ? "#8ce0ff" : "#ffffff");
       } else if (Math.random() < 0.32) {
@@ -1770,23 +1777,6 @@ document.querySelectorAll(".faq__item").forEach((item) => {
     const isAlt = idx % 2 === 1; // Hero начинается слева вверху (x=180), плавно огибает заголовок и выходит справа внизу (x=1260). Поэтому секция 0 (#about) продолжает шлейф справа налево (1260 -> 180), секция 1 — слева направо (180 -> 1260) и так далее по всему сайту.
     const curveId = isAlt ? "#stardustCurveAlt" : "#stardustCurve";
     const dashId = isAlt ? "#stardustDashAlt" : "#stardustDash";
-    const starsMarkup = isAlt
-      ? `
-          <circle cx="224" cy="143" r="2.3" opacity=".85"/>
-          <circle cx="490" cy="263" r="2.6" opacity=".9"/>
-          <circle cx="745" cy="383" r="1.9" opacity=".8"/>
-          <circle cx="1015" cy="537" r="2.3" opacity=".85"/>
-          <circle cx="1174" cy="675" r="2.8" opacity=".9"/>
-          <circle cx="1244" cy="817" r="2.4" opacity=".85"/>
-        `
-      : `
-          <circle cx="1216" cy="143" r="2.3" opacity=".85"/>
-          <circle cx="950" cy="263" r="2.6" opacity=".9"/>
-          <circle cx="695" cy="383" r="1.9" opacity=".8"/>
-          <circle cx="425" cy="537" r="2.3" opacity=".85"/>
-          <circle cx="266" cy="675" r="2.8" opacity=".9"/>
-          <circle cx="196" cy="817" r="2.4" opacity=".85"/>
-        `;
     const altOrbit = idx % 2 === 1 ? " section__orbit--alt" : "";
     const shootDelay1 = (1.5 + (idx * 3.1) % 9).toFixed(1);
     const shootDelay2 = (6.2 + (idx * 2.7) % 10).toFixed(1);
@@ -1809,8 +1799,11 @@ document.querySelectorAll(".faq__item").forEach((item) => {
           <use href="${curveId}" stroke-width="1.4" stroke-opacity=".48"/>
         </g>
         <use href="${dashId}" fill="none" stroke="#8ce0ff" stroke-width="1" stroke-dasharray="2 14" stroke-linecap="round" opacity=".5"/>
-        <g fill="#ffffff">${starsMarkup}</g>
       </svg>
+      <!-- Маленькие изящные звёздочки вдоль млечного пути (взамен растягивавшихся точек) -->
+      <svg class="stardust-star stardust-star--1${isAlt ? " stardust-star--alt" : ""}" aria-hidden="true"><use href="#star-mini"/></svg>
+      <svg class="stardust-star stardust-star--2${isAlt ? " stardust-star--alt" : ""}" aria-hidden="true"><use href="#star-mini"/></svg>
+      <svg class="stardust-star stardust-star--3${isAlt ? " stardust-star--alt" : ""}" aria-hidden="true"><use href="#star-mini"/></svg>
       <svg class="section-chrome-star section-chrome-star--l"><use href="#chrome-star"/></svg>
       <svg class="section-chrome-star section-chrome-star--r"><use href="#chrome-star"/></svg>
       <svg class="section-chrome-star section-chrome-star--sm"><use href="#chrome-star"/></svg>
