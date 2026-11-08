@@ -167,6 +167,14 @@ const voteOpenRegBtn = document.getElementById("voteOpenRegBtn");
 const voteOpenLoginBtn = document.getElementById("voteOpenLoginBtn");
 const voteOpenCabinetBtn = document.getElementById("voteOpenCabinetBtn");
 
+// Элементы секции Регистрации
+const regMainCard = document.getElementById("regMainCard");
+const regSub = document.getElementById("regSub");
+const regAdminBanner = document.getElementById("regAdminBanner");
+const regAdminLoginLabel = document.getElementById("regAdminLoginLabel");
+const regOpenAdminPanelBtn = document.getElementById("regOpenAdminPanelBtn");
+const regAdminLogoutBtn = document.getElementById("regAdminLogoutBtn");
+
 // Элементы Личного кабинета
 const openCabinetHeaderBtn = document.getElementById("openCabinetHeaderBtn");
 const headerCabinetLabel = document.getElementById("headerCabinetLabel");
@@ -222,12 +230,21 @@ const adminLogoutBtn = document.getElementById("adminLogoutBtn");
 const adminStatTotal = document.getElementById("adminStatTotal");
 const adminStatPresent = document.getElementById("adminStatPresent");
 const adminStatVoted = document.getElementById("adminStatVoted");
+const adminStatSupporters = document.getElementById("adminStatSupporters");
+const adminStatSpectators = document.getElementById("adminStatSpectators");
+const adminSupportersBlock = document.getElementById("adminSupportersBlock");
+const adminSupportersGrid = document.getElementById("adminSupportersGrid");
+const adminActiveSupporterFilterBadge = document.getElementById("adminActiveSupporterFilterBadge");
+const adminActiveSupporterName = document.getElementById("adminActiveSupporterName");
+const adminResetSupporterFilterBtn = document.getElementById("adminResetSupporterFilterBtn");
 const adminSearchInput = document.getElementById("adminSearchInput");
 const adminUsersList = document.getElementById("adminUsersList");
 const adminErrorMsg = document.getElementById("adminErrorMsg");
 const adminFilterBtns = document.querySelectorAll("[data-admin-filter]");
 const cabinetDialogEl = cabinetModal ? cabinetModal.querySelector(".cabinet-modal__dialog") : null;
 const cabinetModalTitleEl = document.getElementById("cabinetModalTitle");
+
+let adminSupporterFilter = null;
 
 // Локальные SHA-256 хэши 6 фиксированных админов (для резервного режима file://)
 const LOCAL_ADMIN_HASHES = {
@@ -533,19 +550,24 @@ if (cabTabLogin) {
   cabTabLogin.addEventListener("click", () => switchCabinetTab("login"));
 }
 
-// Открытие / закрытие модального окна Личного кабинета
+// Открытие / закрытие модального окна Личного кабинета (Панель администратора)
 function openCabinetModal(preferredTab) {
-  if (!cabinetModal) return;
-  updateAuthUI();
+  if (isAdminUser()) {
+    if (!cabinetModal) return;
+    updateAuthUI();
+    fetchAdminUsers();
+    cabinetModal.hidden = false;
+    cabinetModal.setAttribute("aria-hidden", "false");
+    document.body.style.overflow = "hidden";
+    return;
+  }
+  const regSec = document.getElementById("registration");
+  if (regSec) {
+    regSec.scrollIntoView({ behavior: "smooth" });
+  }
   if (!isLoggedIn() && preferredTab) {
     switchCabinetTab(preferredTab);
   }
-  if (isAdminUser()) {
-    fetchAdminUsers();
-  }
-  cabinetModal.hidden = false;
-  cabinetModal.setAttribute("aria-hidden", "false");
-  document.body.style.overflow = "hidden";
 }
 
 function closeCabinetModal() {
@@ -557,6 +579,12 @@ function closeCabinetModal() {
 
 if (openCabinetHeaderBtn) {
   openCabinetHeaderBtn.addEventListener("click", () => openCabinetModal("register"));
+}
+if (regOpenAdminPanelBtn) {
+  regOpenAdminPanelBtn.addEventListener("click", () => openCabinetModal());
+}
+if (regAdminLogoutBtn) {
+  regAdminLogoutBtn.addEventListener("click", handleLogout);
 }
 if (voteOpenRegBtn) {
   voteOpenRegBtn.addEventListener("click", () => openCabinetModal("register"));
@@ -616,6 +644,14 @@ function updateAuthUI() {
   const displayUser = prof.fullName || (currentUser && currentUser.login) || "";
   const idSuffix = !adminMode && prof.userId ? ` · ID: ${prof.userId}` : "";
 
+  // Отображение компонентов в секции #registration
+  if (cabinetGuestView) cabinetGuestView.hidden = loggedIn;
+  if (cabinetProfileView) cabinetProfileView.hidden = !(loggedIn && !adminMode);
+  if (regAdminBanner) regAdminBanner.hidden = !(loggedIn && adminMode);
+  if (regAdminLoginLabel && loggedIn && adminMode) {
+    regAdminLoginLabel.textContent = currentUser.login;
+  }
+
   if (voteAuthFormWrap) voteAuthFormWrap.hidden = loggedIn;
   if (voteUserBar) voteUserBar.hidden = !loggedIn;
   if (voteUserName && loggedIn) voteUserName.textContent = displayUser + idSuffix;
@@ -637,13 +673,13 @@ function updateAuthUI() {
     }
   }
 
-  // Плашка ожидания подтверждения присутствия от админа (показывается зарегистрированному зрителю, пока админ его не отметил)
+  // Плашка ожидания подтверждения присутствия от админа
   if (votePresenceWaitBanner) {
     votePresenceWaitBanner.hidden = !(loggedIn && !adminMode && !presentOk);
   }
 
   if (headerCabinetLabel) {
-    headerCabinetLabel.textContent = adminMode ? "ЛК Админа" : "Личный кабинет";
+    headerCabinetLabel.textContent = adminMode ? "ЛК Админа" : loggedIn ? "Мой пропуск" : "Личный кабинет";
   }
 
   if (cabinetDialogEl) {
@@ -653,8 +689,6 @@ function updateAuthUI() {
     cabinetModalTitleEl.textContent = adminMode ? "Личный кабинет администратора" : "Личный кабинет";
   }
 
-  if (cabinetGuestView) cabinetGuestView.hidden = loggedIn;
-  if (cabinetProfileView) cabinetProfileView.hidden = !(loggedIn && !adminMode);
   if (cabinetAdminView) cabinetAdminView.hidden = !(loggedIn && adminMode);
 
   if (loggedIn && adminMode) {
@@ -669,16 +703,20 @@ function updateAuthUI() {
         ? "Не из МГТУ им. Н.Э. Баумана"
         : prof.group || "МГТУ им. Н.Э. Баумана";
     }
-    if (cabProfileSupporter) cabProfileSupporter.textContent = prof.supporterOf || "Просто зритель";
+    const isSpectator = !prof.supporterOf || prof.supporterOf === "Просто зритель";
+    if (cabProfileSupporter) {
+      cabProfileSupporter.textContent = isSpectator
+        ? "Просто зритель"
+        : `Группа поддержки: ${prof.supporterOf}`;
+    }
     if (cabProfilePresence) {
       cabProfilePresence.textContent = presentOk
-        ? "Подтверждено администратором (доступ открыт)"
-        : "Ожидает подтверждения от администратора в БЗДК";
+        ? "Присутствие в зале подтверждено (доступ открыт) ✓"
+        : "Ожидает подтверждения от администратора на входе в БЗДК";
       cabProfilePresence.classList.toggle("cabinet-profile__val--ok", presentOk);
       cabProfilePresence.classList.toggle("cabinet-profile__val--wait", !presentOk);
     }
     if (cabProfileVote) {
-      const isSpectator = !prof.supporterOf || prof.supporterOf === "Просто зритель";
       if (isSpectator) {
         cabProfileVote.textContent = presentOk
           ? "Присутствие подтверждено (статус: просто зритель)"
@@ -686,20 +724,19 @@ function updateAuthUI() {
         cabProfileVote.classList.toggle("cabinet-profile__val--ok", presentOk);
         cabProfileVote.classList.toggle("cabinet-profile__val--wait", !presentOk);
       } else if (presentOk) {
-        cabProfileVote.textContent = `Голос учтён и подтверждён: ${prof.supporterOf}`;
+        cabProfileVote.textContent = `Группа поддержки: ${prof.supporterOf} (подтверждено в зале)`;
         cabProfileVote.classList.add("cabinet-profile__val--ok");
         cabProfileVote.classList.remove("cabinet-profile__val--wait");
       } else {
-        cabProfileVote.textContent = `Ожидает отметки в БЗДК (голос за: ${prof.supporterOf})`;
+        cabProfileVote.textContent = `Ожидает отметки в БЗДК (группа поддержки: ${prof.supporterOf})`;
         cabProfileVote.classList.remove("cabinet-profile__val--ok");
         cabProfileVote.classList.add("cabinet-profile__val--wait");
       }
     }
   }
 
-  // Таблица статистики результатов отображается при открытии голосования
   if (voteGrid) {
-    voteGrid.hidden = !voteIsOpen();
+    voteGrid.hidden = true;
   }
 }
 
@@ -743,13 +780,109 @@ function renderAdminPanel() {
 
   const totalCount = users.length;
   const presentCount = users.filter((u) => u.present).length;
-  const votedCount = users.filter(
-    (u) => Boolean(u.present) && u.supporterOf && u.supporterOf !== "Просто зритель"
+  const supportersCount = users.filter(
+    (u) => u.supporterOf && u.supporterOf !== "Просто зритель"
+  ).length;
+  const spectatorsCount = users.filter(
+    (u) => !u.supporterOf || u.supporterOf === "Просто зритель"
   ).length;
 
   if (adminStatTotal) adminStatTotal.textContent = String(totalCount);
   if (adminStatPresent) adminStatPresent.textContent = String(presentCount);
-  if (adminStatVoted) adminStatVoted.textContent = String(votedCount);
+  if (adminStatSupporters) adminStatSupporters.textContent = String(supportersCount);
+  if (adminStatSpectators) adminStatSpectators.textContent = String(spectatorsCount);
+  if (adminStatVoted) adminStatVoted.textContent = String(supportersCount);
+
+  // Категории для блока статистики по группам поддержки и зрителям
+  const supporterCategories = [
+    ...ALLY.map((c) => ({
+      key: c.name,
+      name: c.name,
+      group: c.group,
+      photo: c.photo,
+      isSpectator: false,
+    })),
+    {
+      key: "Просто зритель",
+      name: "Просто зрители",
+      group: "Гости и зрители финала",
+      photo: null,
+      isSpectator: true,
+    },
+  ];
+
+  const statsMap = {};
+  supporterCategories.forEach((cat) => {
+    statsMap[cat.key] = { total: 0, present: 0 };
+  });
+
+  users.forEach((u) => {
+    const isSpec = !u.supporterOf || u.supporterOf === "Просто зритель";
+    const key = isSpec ? "Просто зритель" : u.supporterOf;
+    if (statsMap[key]) {
+      statsMap[key].total++;
+      if (u.present) statsMap[key].present++;
+    } else if (isSpec) {
+      statsMap["Просто зритель"].total++;
+      if (u.present) statsMap["Просто зритель"].present++;
+    }
+  });
+
+  if (adminSupportersGrid) {
+    adminSupportersGrid.innerHTML = supporterCategories
+      .map((cat) => {
+        const st = statsMap[cat.key] || { total: 0, present: 0 };
+        const isSelected = adminSupporterFilter === cat.key;
+        const pct = st.total > 0 ? Math.round((st.present / st.total) * 100) : 0;
+        const avatarHtml = cat.photo
+          ? `<img src="${cat.photo}" alt="${escapeHtml(cat.name)}">`
+          : `<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>`;
+
+        return `
+          <div class="supporter-stat-card${isSelected ? " is-selected" : ""}" data-supporter-key="${escapeHtml(cat.key)}" role="button" tabindex="0" title="Нажмите для фильтрации: ${escapeHtml(cat.name)}">
+            <div class="supporter-stat-card__avatar">
+              ${avatarHtml}
+            </div>
+            <div class="supporter-stat-card__info">
+              <div class="supporter-stat-card__name">${escapeHtml(cat.name)}</div>
+              <div class="supporter-stat-card__group">${escapeHtml(cat.group)}</div>
+            </div>
+            <div class="supporter-stat-card__counts">
+              <span class="supporter-stat-card__total">${st.total} <small>чел.</small></span>
+              <span class="supporter-stat-card__present${st.present > 0 ? " is-ok" : ""}">${st.present} <small>в зале</small></span>
+            </div>
+            <div class="supporter-stat-card__progress">
+              <div class="supporter-stat-card__bar" style="width: ${pct}%;"></div>
+            </div>
+          </div>
+        `;
+      })
+      .join("");
+
+    adminSupportersGrid.querySelectorAll(".supporter-stat-card").forEach((card) => {
+      card.addEventListener("click", () => {
+        const key = card.getAttribute("data-supporter-key");
+        if (adminSupporterFilter === key) {
+          adminSupporterFilter = null;
+        } else {
+          adminSupporterFilter = key;
+        }
+        renderAdminPanel();
+      });
+    });
+  }
+
+  if (adminActiveSupporterFilterBadge) {
+    if (adminSupporterFilter) {
+      adminActiveSupporterFilterBadge.hidden = false;
+      if (adminActiveSupporterName) {
+        adminActiveSupporterName.textContent =
+          adminSupporterFilter === "Просто зритель" ? "Просто зрители" : adminSupporterFilter;
+      }
+    } else {
+      adminActiveSupporterFilterBadge.hidden = true;
+    }
+  }
 
   const rawQuery = ((adminSearchInput && adminSearchInput.value) || "").trim().toLowerCase();
   const isExplicitIdSearch = /^(?:id|айди|#)\s*:?\s*\d+$/i.test(rawQuery);
@@ -758,6 +891,13 @@ function renderAdminPanel() {
   const filtered = users.filter((u) => {
     if (adminCurrentFilter === "pending" && u.present) return false;
     if (adminCurrentFilter === "present" && !u.present) return false;
+    if (adminSupporterFilter) {
+      if (adminSupporterFilter === "Просто зритель") {
+        if (u.supporterOf && u.supporterOf !== "Просто зритель") return false;
+      } else {
+        if (u.supporterOf !== adminSupporterFilter) return false;
+      }
+    }
     if (!rawQuery) return true;
     const uid = String(u.userId || "").toLowerCase();
     if (isExplicitIdSearch) {
@@ -816,8 +956,8 @@ function renderAdminPanel() {
       const votedBadge = isSpectator
         ? `<span class="admin-badge">Просто зритель</span>`
         : present
-        ? `<span class="admin-badge admin-badge--voted">Голос зачтён: ${escapeHtml(u.supporterOf)}</span>`
-        : `<span class="admin-badge admin-badge--wait">Голос: ${escapeHtml(u.supporterOf)} (ждёт отметки)</span>`;
+        ? `<span class="admin-badge admin-badge--ok">Группа поддержки: ${escapeHtml(u.supporterOf)} (в зале)</span>`
+        : `<span class="admin-badge admin-badge--wait">Группа поддержки: ${escapeHtml(u.supporterOf)} (ждёт отметки)</span>`;
       const btnText = present ? "Снять отметку" : "Подтвердить присутствие";
       const btnClass = "admin-presence-btn" + (present ? " is-revoke" : "");
 
@@ -989,45 +1129,16 @@ adminFilterBtns.forEach((btn) => {
   });
 });
 
-function renderVoteCards() {
-  const presentOk = isUserPresent();
-  const my = myVote();
-  const counts = localCounts();
-  voteGrid.innerHTML = "";
-  FINALISTS.forEach((f, i) => {
-    const total = (f.base || 0) + (counts[f.id] || 0);
-    const chosen = my && my.id === f.id;
-    const fullName = displayName(f, i);
-    const groupHtml = f.group ? `<small class="alley-card__group">${f.group}</small>` : "";
-    const card = document.createElement("article");
-    const cardChosenClass = chosen ? (presentOk ? " is-chosen" : " is-pending-choice") : "";
-    card.className = "alley-card vote-card" + cardChosenClass;
-    const votesBlock = `<p class="vote-card__votes"><b data-votes="${f.id}">${total}</b><small>голосов</small></p>`;
-    let choiceBadge = "";
-    if (chosen) {
-      choiceBadge = presentOk
-        ? `<div class="vote-card__badge vote-card__badge--ok">✓ Ваш подтверждённый голос</div>`
-        : `<div class="vote-card__badge vote-card__badge--wait">Ваш выбор (ждёт отметки в БЗДК)</div>`;
-    }
-    card.innerHTML = `
-      <span class="alley-card__photo vote-card__photo">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 0C13.1 6.9 17.1 10.9 24 12C17.1 13.1 13.1 17.1 12 24C10.9 17.1 6.9 13.1 0 12C6.9 10.9 10.9 6.9 12 0Z"/></svg>
-      </span>
-      <p class="alley-card__name vote-card__name"><span>${fullName}</span>${groupHtml}</p>
-      ${votesBlock}
-      ${choiceBadge}`;
-    if (f.photo) {
-      const img = new Image();
-      img.alt = [fullName, f.group].filter(Boolean).join(", ") || `Участник ${i + 1}`;
-      img.onload = () => {
-        const slot = card.querySelector(".vote-card__photo");
-        slot.textContent = "";
-        slot.appendChild(img);
-      };
-      img.src = f.photo;
-    }
-    voteGrid.appendChild(card);
+if (adminResetSupporterFilterBtn) {
+  adminResetSupporterFilterBtn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    adminSupporterFilter = null;
+    renderAdminPanel();
   });
+}
+
+function renderVoteCards() {
+  // Секция голосования заменена на регистрацию
 }
 
 function applyServerState(data) {
@@ -1472,36 +1583,14 @@ async function voteFor(id) {
   renderVoteCards();
 }
 
-let voteStateShown = null;
 function refreshVote() {
-  const open = voteIsOpen();
-  if (open !== voteStateShown) {
-    voteStateShown = open;
-    voteLocked.hidden = open;
-    if (voteAuth) voteAuth.hidden = false;
-    voteSub.textContent = open
-      ? "Таблица результатов — голоса подтверждённых участников в БЗДК"
-      : "Зарегистрируйтесь заранее — результаты голосования откроются во время финала 8 декабря в 17:00";
-    if (open) syncVotesFromServer();
-  }
-  if (voteGrid) {
-    voteGrid.hidden = !open;
-  }
-  if (!open) {
-    const left = Math.max(0, VOTE_OPEN_AT - Date.now());
-    document.getElementById("vd-days").textContent = pad(Math.floor(left / 86400000));
-    document.getElementById("vd-hours").textContent = pad(Math.floor(left / 3600000) % 24);
-    document.getElementById("vd-mins").textContent = pad(Math.floor(left / 60000) % 60);
-    document.getElementById("vd-secs").textContent = pad(Math.floor(left / 1000) % 60);
-  }
+  // Секция голосования заменена на регистрацию участников
 }
 updateAuthUI();
-renderVoteCards();
-refreshVote();
 syncVotesFromServer();
-// Синхронизируем статус присутствия и общие голоса со всех устройств (только в активной вкладке)
+// Синхронизируем статус присутствия и данные профиля (только в активной вкладке)
 setInterval(() => {
-  if (!document.hidden && (voteIsOpen() || isLoggedIn())) {
+  if (!document.hidden && isLoggedIn()) {
     syncVotesFromServer();
   }
 }, 5000);
@@ -1539,7 +1628,6 @@ function tick() {
     lastAutoStage = autoStage;
     activateStage(autoStage);
   }
-  refreshVote();
 }
 tick();
 setInterval(tick, 1000);
