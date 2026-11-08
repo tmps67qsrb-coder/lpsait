@@ -1486,6 +1486,7 @@ b { color: var(--cream); font-weight: 600; }
   text-align: center;
   position: relative;
   z-index: 1;
+  transform: translateX(32px);
 }
 .poster-sheet__title strong {
   font-family: var(--font-display);
@@ -2890,6 +2891,7 @@ b { color: var(--cream); font-weight: 600; }
   .poster-sheet__title {
     margin: 0 auto;
     text-align: center;
+    transform: none;
   }
   .poster-sheet__logos img { height: 26px; }
   .poster-sheet__board { padding: 18px 18px 16px 12px; border-radius: 14px; }
