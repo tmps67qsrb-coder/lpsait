@@ -10,7 +10,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&family=Viaoda+Libre&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css?v=57">
+  <link rel="stylesheet" href="styles.css?v=58">
 </head>
 <body>
 
@@ -1133,7 +1133,7 @@
           </svg>
           <div class="vote-presence-wait__body">
             <p class="vote-presence-wait__title">Ожидается подтверждение вашего присутствия от администратора</p>
-            <p class="vote-presence-wait__sub">Право на голосование открывается после регистрации и подтверждения вашего присутствия администратором в БЗДК. Подойдите к стойке организаторов — после отметки голосование откроется автоматически.</p>
+            <p class="vote-presence-wait__sub">Право на голосование открывается после регистрации и подтверждения вашего присутствия администратором в БЗДК. Подойдите к стойке организаторов и назовите ваш 4-значный ID или ФИО — после отметки голосование откроется автоматически.</p>
           </div>
         </div>
       </div>
@@ -1341,6 +1341,10 @@
         </div>
 
         <div class="cabinet-profile__card">
+          <div class="cabinet-profile__row cabinet-profile__row--id">
+            <span class="cabinet-profile__label">Ваш индивидуальный ID:</span>
+            <b class="cabinet-profile__val cabinet-profile__val--id" id="cabProfileId">—</b>
+          </div>
           <div class="cabinet-profile__row">
             <span class="cabinet-profile__label">ФИО:</span>
             <b class="cabinet-profile__val" id="cabProfileName">—</b>
@@ -1411,7 +1415,7 @@
             type="search"
             class="cabinet-admin__search"
             id="adminSearchInput"
-            placeholder="Поиск по ФИО, телефону, группе или участнику..."
+            placeholder="Поиск по 4-значному ID, ФИО, телефону, группе или участнику..."
             autocomplete="off"
           >
           <div class="cabinet-admin__filters" role="tablist" aria-label="Фильтр списка участников">
@@ -1451,6 +1455,6 @@
     </div>
   </div>
 
-  <script src="script.js?v=57"></script>
+  <script src="script.js?v=58"></script>
 </body>
 </html>

@@ -189,6 +189,7 @@ const loginPassToggle = document.getElementById("loginPassToggle");
 const loginErrorMsg = document.getElementById("loginErrorMsg");
 
 // Элементы профиля в Личном кабинете
+const cabProfileId = document.getElementById("cabProfileId");
 const cabProfileName = document.getElementById("cabProfileName");
 const cabProfilePhone = document.getElementById("cabProfilePhone");
 const cabProfileGroup = document.getElementById("cabProfileGroup");
@@ -272,6 +273,26 @@ function normalizePhoneClient(raw) {
     return "+" + digits;
   }
   return "";
+}
+
+function generateLocalUserId(phone, profilesMap) {
+  const used = new Set(
+    Object.values(profilesMap || {})
+      .map((p) => p && String(p.userId || ""))
+      .filter((id) => /^\d{4}$/.test(id))
+  );
+  let h = 2166136261;
+  const str = String(phone || "").toLowerCase();
+  for (let i = 0; i < str.length; i++) {
+    h ^= str.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  const base = ((h >>> 0) % 9000) + 1000;
+  for (let offset = 0; offset < 9000; offset++) {
+    const cand = String(((base - 1000 + offset) % 9000) + 1000);
+    if (!used.has(cand)) return cand;
+  }
+  return String(base);
 }
 
 function checkPasswordRules(pwd) {
@@ -428,10 +449,11 @@ function updateAuthUI() {
   const presentOk = isUserPresent();
   const prof = (currentUser && currentUser.profile) || {};
   const displayUser = prof.fullName || (currentUser && currentUser.login) || "";
+  const idSuffix = !adminMode && prof.userId ? ` · ID: ${prof.userId}` : "";
 
   if (voteAuthFormWrap) voteAuthFormWrap.hidden = loggedIn;
   if (voteUserBar) voteUserBar.hidden = !loggedIn;
-  if (voteUserName && loggedIn) voteUserName.textContent = displayUser;
+  if (voteUserName && loggedIn) voteUserName.textContent = displayUser + idSuffix;
   if (voteAuthError) voteAuthError.hidden = true;
 
   if (voteOpenCabinetBtn) {
@@ -467,6 +489,7 @@ function updateAuthUI() {
     if (adminLoginLabel) adminLoginLabel.textContent = currentUser.login;
     renderAdminPanel();
   } else if (loggedIn) {
+    if (cabProfileId) cabProfileId.textContent = prof.userId || "—";
     if (cabProfileName) cabProfileName.textContent = prof.fullName || currentUser.login;
     if (cabProfilePhone) cabProfilePhone.textContent = prof.phone || currentUser.login;
     if (cabProfileGroup) {
@@ -551,17 +574,44 @@ function renderAdminPanel() {
   if (adminStatPresent) adminStatPresent.textContent = String(presentCount);
   if (adminStatVoted) adminStatVoted.textContent = String(votedCount);
 
-  const query = ((adminSearchInput && adminSearchInput.value) || "").trim().toLowerCase();
+  const rawQuery = ((adminSearchInput && adminSearchInput.value) || "").trim().toLowerCase();
+  const isExplicitIdSearch = /^(?:id|айди|#)\s*:?\s*\d+$/i.test(rawQuery);
+  const cleanIdQuery = rawQuery.replace(/^(?:id|айди|#|\s|:)+/i, "").trim();
+
   const filtered = users.filter((u) => {
     if (adminCurrentFilter === "pending" && u.present) return false;
     if (adminCurrentFilter === "present" && !u.present) return false;
-    if (!query) return true;
-    const hay = [u.fullName, u.phone, u.login, u.group, u.supporterOf]
+    if (!rawQuery) return true;
+    const uid = String(u.userId || "").toLowerCase();
+    if (isExplicitIdSearch) {
+      return uid.includes(cleanIdQuery);
+    }
+    const hay = [
+      uid,
+      uid ? `id${uid}` : "",
+      uid ? `id ${uid}` : "",
+      uid ? `#${uid}` : "",
+      u.fullName,
+      u.phone,
+      u.login,
+      u.group,
+      u.supporterOf,
+    ]
       .filter(Boolean)
       .join(" ")
       .toLowerCase();
-    return hay.includes(query);
+    return hay.includes(rawQuery) || Boolean(cleanIdQuery && uid.includes(cleanIdQuery));
   });
+
+  if (rawQuery && cleanIdQuery) {
+    filtered.sort((a, b) => {
+      const aId = String(a.userId || "").toLowerCase();
+      const bId = String(b.userId || "").toLowerCase();
+      const aExact = aId === cleanIdQuery ? 0 : aId.startsWith(cleanIdQuery) ? 1 : 2;
+      const bExact = bId === cleanIdQuery ? 0 : bId.startsWith(cleanIdQuery) ? 1 : 2;
+      return aExact - bExact;
+    });
+  }
 
   if (!filtered.length) {
     const emptyHtml = `<p class="cabinet-admin__empty">${
@@ -580,6 +630,7 @@ function renderAdminPanel() {
     .map((u) => {
       const present = Boolean(u.present);
       const voted = Boolean(u.hasVoted);
+      const uidLabel = escapeHtml(u.userId || "—");
       const statusBadge = present
         ? `<span class="admin-badge admin-badge--ok">Присутствие подтверждено${
             u.verifiedBy ? " (" + escapeHtml(u.verifiedBy) + ")" : ""
@@ -594,7 +645,10 @@ function renderAdminPanel() {
       return `
         <div class="admin-user-card${present ? " is-present" : ""}">
           <div class="admin-user-card__info">
-            <div class="admin-user-card__name">${escapeHtml(u.fullName || u.phone)}</div>
+            <div class="admin-user-card__head">
+              <span class="admin-user-card__id" title="Индивидуальный 4-значный ID">ID: ${uidLabel}</span>
+              <div class="admin-user-card__name">${escapeHtml(u.fullName || u.phone)}</div>
+            </div>
             <div class="admin-user-card__meta">
               <span>Тел.: <b>${escapeHtml(u.phone || u.login)}</b></span>
               <span>Группа: <b>${escapeHtml(u.group || "—")}</b></span>
@@ -644,6 +698,7 @@ async function fetchAdminUsers() {
     adminUsersCache = Object.values(localProfiles).map((u) => ({
       login: u.phone,
       phone: u.phone,
+      userId: u.userId || generateLocalUserId(u.phone, {}),
       fullName: u.fullName,
       group: u.notBmstu ? "Не из МГТУ им. Н.Э. Баумана" : u.group,
       notBmstu: Boolean(u.notBmstu),
@@ -982,7 +1037,9 @@ if (cabinetRegForm) {
         showRegError("Этот номер телефона уже зарегистрирован. Перейдите во вкладку «Вход».");
         return;
       }
+      const userId = generateLocalUserId(phone, localProfiles);
       const profile = {
+        userId,
         phone,
         fullName,
         group: groupVal,
@@ -1103,11 +1160,16 @@ if (cabinetLoginForm) {
         showLoginError("Неверный номер телефона или пароль");
         return;
       }
+      if (!found.userId) {
+        found.userId = generateLocalUserId(found.phone, localProfiles);
+        writeJSON(LS_LOCAL_PROFILES, localProfiles);
+      }
       currentUser = {
         login: loginKey,
         is_admin: false,
         token: "local." + Date.now(),
         profile: {
+          userId: found.userId,
           phone: found.phone,
           fullName: found.fullName,
           group: found.group,

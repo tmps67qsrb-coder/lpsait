@@ -316,6 +316,47 @@ async function getCachedState(store, forceFresh = false) {
   return state;
 }
 
+function deriveDeterministicUserId(login) {
+  const norm = String(login || "").trim().toLowerCase();
+  const digest = crypto
+    .createHmac("sha256", SECRET_KEY)
+    .update(`uid4:${norm}`)
+    .digest();
+  const num = (digest.readUInt32BE(0) % 9000) + 1000;
+  return String(num);
+}
+
+async function allocateUniqueUserId(store, login) {
+  const norm = String(login || "").trim().toLowerCase();
+  const baseNum = parseInt(deriveDeterministicUserId(norm), 10);
+  let idMap = null;
+  try {
+    idMap = await store.get("user_id_map", { type: "json" });
+  } catch {
+    idMap = null;
+  }
+  if (!idMap || typeof idMap !== "object" || Array.isArray(idMap)) {
+    idMap = {};
+  }
+  for (const [uid, owner] of Object.entries(idMap)) {
+    if (String(owner).toLowerCase() === norm && /^\d{4}$/.test(uid)) {
+      return uid;
+    }
+  }
+  for (let offset = 0; offset < 9000; offset++) {
+    const candidate = String(((baseNum - 1000 + offset) % 9000) + 1000);
+    const existingOwner = idMap[candidate];
+    if (!existingOwner || String(existingOwner).toLowerCase() === norm) {
+      idMap[candidate] = norm;
+      try {
+        await store.setJSON("user_id_map", idMap);
+      } catch {}
+      return candidate;
+    }
+  }
+  return String(baseNum);
+}
+
 async function findUserAccount(store, rawLogin) {
   const normPhone = normalizePhone(rawLogin);
   const lookupKey = (normPhone || String(rawLogin || "").trim()).toLowerCase();
@@ -323,8 +364,20 @@ async function findUserAccount(store, rawLogin) {
 
   const blobUser = await store.get(`user:${lookupKey}`, { type: "json" });
   if (blobUser) {
+    let userId =
+      blobUser.userId && /^\d{4}$/.test(String(blobUser.userId))
+        ? String(blobUser.userId)
+        : "";
+    if (!userId) {
+      userId = await allocateUniqueUserId(store, lookupKey);
+      blobUser.userId = userId;
+      try {
+        await store.setJSON(`user:${lookupKey}`, blobUser);
+      } catch {}
+    }
     return {
       ...blobUser,
+      userId,
       fullName: decryptField(blobUser.fullName),
       group: decryptField(blobUser.group),
       supporterOf: decryptField(blobUser.supporterOf),
@@ -342,6 +395,7 @@ async function findUserAccount(store, rawLogin) {
       return {
         login: found.login,
         phone: found.phone || found.login,
+        userId: String(found.userId || deriveDeterministicUserId(found.login)),
         fullName: found.fullName || found.login,
         group: found.group || "МГТУ им. Н.Э. Баумана",
         notBmstu: Boolean(found.notBmstu),
@@ -399,6 +453,17 @@ async function listAllUsersForAdmin(store, forceFresh = false) {
           store.get(`voter:${lg}`, { type: "json" }),
         ]);
         if (!u) return null;
+        let userId =
+          u.userId && /^\d{4}$/.test(String(u.userId))
+            ? String(u.userId)
+            : "";
+        if (!userId) {
+          userId = deriveDeterministicUserId(u.login || lg);
+          u.userId = userId;
+          try {
+            await store.setJSON(`user:${lg}`, u);
+          } catch {}
+        }
         const notBmstu = Boolean(u.notBmstu);
         const decName = decryptField(u.fullName) || lg;
         const decGroup = decryptField(u.group) || "";
@@ -406,6 +471,7 @@ async function listAllUsersForAdmin(store, forceFresh = false) {
         return {
           login: u.login || lg,
           phone: u.phone || u.login || lg,
+          userId,
           fullName: decName,
           group: notBmstu ? "Не из МГТУ им. Н.Э. Баумана" : decGroup,
           notBmstu,
@@ -429,7 +495,11 @@ async function listAllUsersForAdmin(store, forceFresh = false) {
 
 function formatPublicProfile(userObj) {
   if (!userObj) return null;
+  const fallbackLogin = userObj.login || userObj.phone || "";
   return {
+    userId: String(
+      userObj.userId || (fallbackLogin ? deriveDeterministicUserId(fallbackLogin) : "")
+    ),
     phone: userObj.phone || userObj.login,
     fullName: userObj.fullName || "",
     group: userObj.notBmstu ? "Не из МГТУ им. Н.Э. Баумана" : userObj.group || "",
@@ -592,9 +662,12 @@ export default async (req) => {
 
       recordAttempt(regRlKey);
 
+      const userId = await allocateUniqueUserId(store, phone);
+
       const storedRecord = {
         login: phone,
         phone,
+        userId,
         fullName: encryptField(fullName),
         group: encryptField(group),
         notBmstu,
@@ -624,6 +697,7 @@ export default async (req) => {
         is_admin: false,
         token,
         profile: {
+          userId,
           phone,
           fullName,
           group,

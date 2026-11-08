@@ -319,6 +319,30 @@ def open_db() -> sqlite3.Connection:
     return conn
 
 
+def derive_deterministic_user_id(login: str) -> str:
+    norm = str(login or "").strip().lower()
+    digest = hmac.new(SECRET_KEY, f"uid4:{norm}".encode("utf-8"), hashlib.sha256).digest()
+    num = (int.from_bytes(digest[:4], "big") % 9000) + 1000
+    return str(num)
+
+
+def generate_unique_user_id(cur: sqlite3.Cursor, login: str) -> str:
+    norm = str(login or "").strip().lower()
+    base_num = int(derive_deterministic_user_id(norm))
+    existing_ids = {
+        str(r[0])
+        for r in cur.execute(
+            "SELECT user_id FROM users WHERE user_id IS NOT NULL AND user_id != '' AND login != ?",
+            (norm,),
+        ).fetchall()
+    }
+    for offset in range(9000):
+        candidate = str(((base_num - 1000 + offset) % 9000) + 1000)
+        if candidate not in existing_ids:
+            return candidate
+    return str(base_num)
+
+
 def sync_users_from_json(conn: sqlite3.Connection):
     if not os.path.exists(USERS_JSON_PATH):
         return
@@ -338,14 +362,16 @@ def sync_users_from_json(conn: sqlite3.Connection):
             if not pwd_hash and item.get("password"):
                 pwd_hash = create_password_hash(str(item.get("password")))
             if login and pwd_hash:
+                uid = str(item.get("userId") or "") or generate_unique_user_id(cur, login)
                 cur.execute(
                     """
-                    INSERT INTO users (login, password_hash, full_name, study_group, not_bmstu, supporter_of, present, verified_by, created_at)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    INSERT INTO users (login, user_id, password_hash, full_name, study_group, not_bmstu, supporter_of, present, verified_by, created_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     ON CONFLICT(login) DO UPDATE SET password_hash = excluded.password_hash
                     """,
                     (
                         login,
+                        uid,
                         pwd_hash,
                         encrypt_field(str(item.get("fullName") or login)),
                         encrypt_field(str(item.get("group") or "МГТУ им. Н.Э. Баумана")),
@@ -367,6 +393,7 @@ def init_db():
             """
             CREATE TABLE IF NOT EXISTS users (
                 login TEXT PRIMARY KEY,
+                user_id TEXT DEFAULT '',
                 password_hash TEXT NOT NULL,
                 full_name TEXT DEFAULT '',
                 study_group TEXT DEFAULT '',
@@ -379,6 +406,7 @@ def init_db():
             """
         )
         for col_sql in (
+            "ALTER TABLE users ADD COLUMN user_id TEXT DEFAULT ''",
             "ALTER TABLE users ADD COLUMN full_name TEXT DEFAULT ''",
             "ALTER TABLE users ADD COLUMN study_group TEXT DEFAULT ''",
             "ALTER TABLE users ADD COLUMN not_bmstu INTEGER DEFAULT 0",
@@ -391,6 +419,16 @@ def init_db():
                 conn.execute(col_sql)
             except sqlite3.OperationalError:
                 pass
+
+        cur = conn.cursor()
+        empty_rows = cur.execute(
+            "SELECT login FROM users WHERE user_id IS NULL OR user_id = ''"
+        ).fetchall()
+        for (lg,) in empty_rows:
+            uid = generate_unique_user_id(cur, lg)
+            cur.execute("UPDATE users SET user_id = ? WHERE login = ?", (uid, lg))
+        if empty_rows:
+            conn.commit()
 
         conn.execute(
             """
@@ -420,7 +458,7 @@ def get_user_profile(cur: sqlite3.Cursor, login_key: str):
         return None
     row = cur.execute(
         """
-        SELECT login, password_hash, full_name, study_group, not_bmstu, supporter_of, present, verified_by, created_at
+        SELECT login, password_hash, full_name, study_group, not_bmstu, supporter_of, present, verified_by, created_at, user_id
         FROM users WHERE login = ? LIMIT 1
         """,
         (clean_login,),
@@ -433,10 +471,15 @@ def get_user_profile(cur: sqlite3.Cursor, login_key: str):
     dec_name = decrypt_field(row[2]) or row[0]
     dec_group = decrypt_field(row[3]) or ""
     dec_supporter = decrypt_field(row[5]) or "Просто зритель"
+    user_id = str(row[9] or "").strip()
+    if not user_id or not user_id.isdigit() or len(user_id) != 4:
+        user_id = generate_unique_user_id(cur, clean_login)
+        cur.execute("UPDATE users SET user_id = ? WHERE login = ?", (user_id, clean_login))
     return {
         "login": row[0],
         "password_hash": row[1],
         "profile": {
+            "userId": user_id,
             "phone": row[0],
             "fullName": dec_name,
             "group": "Не из МГТУ им. Н.Э. Баумана" if not_bmstu_flag else dec_group,
@@ -455,7 +498,7 @@ def list_all_users_for_admin(cur: sqlite3.Cursor) -> list:
     }
     rows = cur.execute(
         """
-        SELECT login, full_name, study_group, not_bmstu, supporter_of, present, verified_by, created_at
+        SELECT login, full_name, study_group, not_bmstu, supporter_of, present, verified_by, created_at, user_id
         FROM users
         ORDER BY created_at DESC, login ASC
         """
@@ -472,11 +515,16 @@ def list_all_users_for_admin(cur: sqlite3.Cursor) -> list:
         present_flag = bool(row[5])
         verified_by = str(row[6] or "")
         created_at = int(row[7] or 0)
+        user_id = str(row[8] or "").strip()
+        if not user_id or not user_id.isdigit() or len(user_id) != 4:
+            user_id = generate_unique_user_id(cur, login)
+            cur.execute("UPDATE users SET user_id = ? WHERE login = ?", (user_id, login))
         vote_cid = voted_devices.get(f"user:{login.lower()}")
         result.append(
             {
                 "login": login,
                 "phone": login,
+                "userId": user_id,
                 "fullName": dec_name,
                 "group": "Не из МГТУ им. Н.Э. Баумана" if not_bmstu_flag else dec_group,
                 "notBmstu": not_bmstu_flag,
@@ -809,14 +857,16 @@ class ProforgHandler(SimpleHTTPRequestHandler):
                     return
 
                 record_attempt(reg_rl_key)
+                user_id = generate_unique_user_id(cur, phone.lower())
 
                 cur.execute(
                     """
-                    INSERT INTO users (login, password_hash, full_name, study_group, not_bmstu, supporter_of, present, verified_by, created_at)
-                    VALUES (?, ?, ?, ?, ?, ?, 0, '', ?)
+                    INSERT INTO users (login, user_id, password_hash, full_name, study_group, not_bmstu, supporter_of, present, verified_by, created_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, 0, '', ?)
                     """,
                     (
                         phone.lower(),
+                        user_id,
                         pwd_hash,
                         enc_name,
                         enc_group,
@@ -838,6 +888,7 @@ class ProforgHandler(SimpleHTTPRequestHandler):
                     "is_admin": False,
                     "token": token,
                     "profile": {
+                        "userId": user_id,
                         "phone": phone,
                         "fullName": full_name,
                         "group": study_group,
