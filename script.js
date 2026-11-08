@@ -1585,26 +1585,27 @@ document.querySelectorAll(".faq__item").forEach((item) => {
 
 // ============================================================
 // ФОНОВАЯ АТМОСФЕРНАЯ МУЗЫКА (Menta — Alessandro Cortini)
-// Автозапуск при входе на сайт + авто-разблокировка при любом взаимодействии
+// Автоматический запуск при заходе на сайт на негромкой комфортной громкости
 // ============================================================
 (function initBackgroundMusic() {
   const audio = document.getElementById("bgMusic");
   const toggleBtn = document.getElementById("audioToggleBtn");
   if (!audio) return;
 
-  const TARGET_VOLUME = 0.45;
-  let userExplicitlyPaused = false;
-  try {
-    userExplicitlyPaused = sessionStorage.getItem("lp_music_paused") === "1";
-  } catch (e) {}
-
-  let isPlaying = false;
+  // Негромкая комфортная фоновая громкость (18%)
+  const TARGET_VOLUME = 0.18;
   let fadeTimer = null;
+  let isManuallyPaused = false;
+
+  // Сбрасываем старые блокировки сессии, чтобы при входе на сайт музыка всегда запускалась автоматически
+  try {
+    sessionStorage.removeItem("lp_music_paused");
+  } catch (e) {}
 
   function fadeVolume(target, duration, onComplete) {
     if (fadeTimer) clearInterval(fadeTimer);
     const start = audio.volume;
-    const stepTime = 50;
+    const stepTime = 40;
     const steps = Math.max(1, Math.floor(duration / stepTime));
     let currentStep = 0;
     fadeTimer = setInterval(() => {
@@ -1620,7 +1621,6 @@ document.querySelectorAll(".faq__item").forEach((item) => {
   }
 
   function updateUI(playing) {
-    isPlaying = playing;
     if (!toggleBtn) return;
     if (playing) {
       toggleBtn.classList.add("is-playing");
@@ -1633,75 +1633,109 @@ document.querySelectorAll(".faq__item").forEach((item) => {
     }
   }
 
-  function playMusic() {
-    if (userExplicitlyPaused) return;
-    audio.volume = 0;
+  // 1. Прямая попытка запуска со звуком (срабатывает, если браузер уже доверяет домену или разрешает автоплей)
+  function attemptDirectPlay() {
+    if (isManuallyPaused) return;
+    audio.muted = false;
+    audio.volume = TARGET_VOLUME;
     const promise = audio.play();
     if (promise !== undefined) {
       promise
         .then(() => {
           updateUI(true);
-          fadeVolume(TARGET_VOLUME, 1500);
         })
         .catch(() => {
-          updateUI(false);
-          attachUnlockListeners();
+          // Если браузер заблокировал автоплей со звуком: запускаем беззвучно и вешаем слушатели на любое первое действие
+          startMutedWithGestureUnlock();
         });
     }
   }
 
-  function pauseMusic() {
-    fadeVolume(0, 350, () => {
-      audio.pause();
-      updateUI(false);
-    });
-  }
-
-  const unlockEvents = ["pointerdown", "touchstart", "click", "keydown", "scroll", "wheel"];
-  function onFirstInteraction() {
-    removeUnlockListeners();
-    if (!userExplicitlyPaused && audio.paused) {
-      playMusic();
+  // 2. Muted-запуск (разрешён 100% браузеров) + мгновенное включение звука при первом клике/тапе/скролле
+  function startMutedWithGestureUnlock() {
+    if (isManuallyPaused) return;
+    audio.muted = true;
+    audio.volume = TARGET_VOLUME;
+    const mutedPromise = audio.play();
+    if (mutedPromise !== undefined) {
+      mutedPromise.catch(() => {});
     }
-  }
 
-  function attachUnlockListeners() {
+    const unlockEvents = ["pointerdown", "touchstart", "mousedown", "click", "keydown", "scroll", "wheel"];
+
+    function tryUnmute() {
+      if (isManuallyPaused) {
+        removeUnlockListeners();
+        return;
+      }
+      audio.muted = false;
+      audio.volume = 0;
+      const playPromise = audio.play();
+      if (playPromise !== undefined) {
+        playPromise
+          .then(() => {
+            // Успешно разблокировано! Снимаем слушатели и плавно доводим громкость до комфортных 18%
+            removeUnlockListeners();
+            updateUI(true);
+            fadeVolume(TARGET_VOLUME, 1200);
+          })
+          .catch(() => {
+            // Если данное событие браузер не счёл за user gesture (например, пассивный скролл в части версий),
+            // оставляем поток играть muted и держим слушатели активными для следующего клика/тапа
+            audio.muted = true;
+          });
+      } else {
+        removeUnlockListeners();
+        updateUI(true);
+        audio.volume = TARGET_VOLUME;
+      }
+    }
+
+    function removeUnlockListeners() {
+      unlockEvents.forEach((evt) => {
+        window.removeEventListener(evt, tryUnmute, { capture: true });
+        document.removeEventListener(evt, tryUnmute, { capture: true });
+      });
+    }
+
     unlockEvents.forEach((evt) => {
-      window.addEventListener(evt, onFirstInteraction, { once: true, passive: true });
+      window.addEventListener(evt, tryUnmute, { capture: true, passive: true });
+      document.addEventListener(evt, tryUnmute, { capture: true, passive: true });
     });
   }
 
-  function removeUnlockListeners() {
-    unlockEvents.forEach((evt) => {
-      window.removeEventListener(evt, onFirstInteraction, { passive: true });
-    });
-  }
-
+  // Кнопка в шапке служит ручным переключателем (выключить/включить звук)
   if (toggleBtn) {
     toggleBtn.addEventListener("click", (e) => {
       e.stopPropagation();
-      if (isPlaying && !audio.paused) {
-        userExplicitlyPaused = true;
-        try {
-          sessionStorage.setItem("lp_music_paused", "1");
-        } catch (err) {}
-        pauseMusic();
+      if (!audio.paused && !audio.muted) {
+        isManuallyPaused = true;
+        fadeVolume(0, 300, () => {
+          audio.pause();
+          updateUI(false);
+        });
       } else {
-        userExplicitlyPaused = false;
-        try {
-          sessionStorage.removeItem("lp_music_paused");
-        } catch (err) {}
-        playMusic();
+        isManuallyPaused = false;
+        audio.muted = false;
+        audio.volume = 0;
+        const p = audio.play();
+        if (p !== undefined) {
+          p.then(() => {
+            updateUI(true);
+            fadeVolume(TARGET_VOLUME, 800);
+          }).catch(() => {
+            updateUI(false);
+          });
+        }
       }
     });
   }
 
-  // Запуск при входе на страницу
-  if (!userExplicitlyPaused) {
-    playMusic();
-    attachUnlockListeners();
+  // Запуск при старте страницы
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", attemptDirectPlay);
   } else {
-    updateUI(false);
+    attemptDirectPlay();
   }
 })();
 
