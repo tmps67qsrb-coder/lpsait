@@ -2551,9 +2551,9 @@ b { color: var(--cream); font-weight: 600; }
    ============================================================ */
 .sponsors {
   display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  gap: 18px;
+  flex-direction: column;
+  align-items: center;
+  gap: 20px;
   margin-top: 56px;
   padding: 42px 32px;
   border: 1px solid var(--poster-border);
@@ -2589,6 +2589,18 @@ b { color: var(--cream); font-weight: 600; }
   background: linear-gradient(90deg, transparent, var(--accent), #ffffff, transparent);
   box-shadow: 0 0 14px 2px rgba(140, 224, 255, 0.85);
 }
+.sponsors__row {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+  gap: 18px;
+  width: 100%;
+}
+.sponsors__row--top {
+  gap: 22px;
+  margin-bottom: 4px;
+}
 .sponsors__plate {
   display: grid;
   place-items: center;
@@ -2601,12 +2613,26 @@ b { color: var(--cream); font-weight: 600; }
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.38), 0 0 16px rgba(140, 224, 255, 0.14);
   transition: transform 0.25s ease, box-shadow 0.25s ease, background 0.25s ease;
 }
+.sponsors__plate--top {
+  min-height: 78px;
+  padding: 18px 30px;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.42), 0 0 20px rgba(140, 224, 255, 0.2);
+}
 .sponsors__plate:hover {
   transform: translateY(-4px);
   background: #ffffff;
   box-shadow: 0 14px 36px rgba(140, 224, 255, 0.42), 0 0 22px rgba(255, 255, 255, 0.4);
 }
-.sponsors__plate img { max-height: 40px; width: auto; }
+.sponsors__plate img {
+  max-height: 40px;
+  max-width: 100%;
+  width: auto;
+  height: auto;
+  display: block;
+}
+.sponsors__plate--top img {
+  max-height: 44px;
+}
 .sponsors__note {
   text-align: center;
   margin-top: 38px;
@@ -2939,7 +2965,11 @@ b { color: var(--cream); font-weight: 600; }
   .poster-sheet__board--text { padding: 28px 20px; min-height: 220px; }
   .results-table { font-size: 14.5px; }
   .results-table td { padding: 7px 6px; }
-  .sponsors { padding: 26px 16px; }
+  .sponsors { padding: 24px 14px; gap: 14px; }
+  .sponsors__row { gap: 12px; }
+  .sponsors__plate { min-width: 124px; padding: 12px 18px; min-height: 60px; }
+  .sponsors__plate img { max-height: 32px; }
+  .sponsors__plate--top img { max-height: 36px; }
   .stage-tabs { padding: 20px 16px 26px; }
   .stage-tabs__bar { justify-content: center; }
 
