@@ -1766,6 +1766,9 @@ b { color: var(--cream); font-weight: 600; }
   text-transform: uppercase;
   text-shadow: 0 0 12px rgba(140, 224, 255, 0.4);
 }
+.results-table__group-sub {
+  display: none;
+}
 .results-table__sum {
   font-family: var(--font-text);
   font-size: 19px;
@@ -2961,10 +2964,89 @@ b { color: var(--cream); font-weight: 600; }
     transform: none;
   }
   .poster-sheet__logos img { height: 26px; }
-  .poster-sheet__board { padding: 18px 18px 16px 12px; border-radius: 14px; }
-  .poster-sheet__board--text { padding: 28px 20px; min-height: 220px; }
-  .results-table { font-size: 14.5px; }
-  .results-table td { padding: 7px 6px; }
+  .poster-sheet__board { padding: 14px 8px 14px 6px; border-radius: 12px; }
+  .poster-sheet__board--text { padding: 24px 16px; min-height: 220px; }
+  .results-table-wrap {
+    width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(140, 224, 255, 0.4) transparent;
+  }
+  .results-table-wrap::-webkit-scrollbar {
+    height: 4px;
+  }
+  .results-table-wrap::-webkit-scrollbar-thumb {
+    background: rgba(140, 224, 255, 0.4);
+    border-radius: 4px;
+  }
+  .results-table {
+    width: 100%;
+    font-size: 13px;
+    table-layout: auto;
+  }
+  .results-table td {
+    padding: 7px 3px;
+  }
+  /* На смартфонах скрываем отдельный столбец группы, группа отображается компактным бейджем под именем */
+  .results-table th.results-table__group,
+  .results-table td.results-table__group {
+    display: none !important;
+  }
+  .results-table__group-sub {
+    display: block;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--accent);
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    text-shadow: 0 0 10px rgba(140, 224, 255, 0.35);
+    margin-top: 1px;
+    line-height: 1.1;
+  }
+  .results-table__num {
+    width: 22px;
+    padding: 7px 2px !important;
+    font-size: 15px;
+  }
+  .results-table__name {
+    padding-left: 6px !important;
+    padding-right: 4px !important;
+    white-space: normal !important;
+    line-height: 1.22;
+  }
+  .results-table__name span {
+    font-size: 13px;
+    font-weight: 600;
+    display: inline;
+    padding: 0;
+  }
+  .results-table tr.is-top .results-table__name span {
+    padding: 0;
+    margin-left: 0;
+    background: none;
+    text-shadow: 0 0 10px rgba(140, 224, 255, 0.45);
+  }
+  .results-table thead th {
+    padding: 0 3px 8px;
+    font-size: 10.5px;
+    vertical-align: bottom;
+  }
+  .results-table thead th b {
+    display: inline;
+    font-size: 13.5px;
+    margin-right: 2px;
+  }
+  .results-table thead th span {
+    font-size: 10px;
+    text-transform: lowercase;
+  }
+  .results-table__sum {
+    font-size: 15.5px !important;
+    font-weight: 700 !important;
+    padding: 7px 2px !important;
+    width: 42px;
+  }
   .sponsors { padding: 24px 14px; gap: 14px; }
   .sponsors__row { gap: 12px; }
   .sponsors__plate { min-width: 124px; padding: 12px 18px; min-height: 60px; }

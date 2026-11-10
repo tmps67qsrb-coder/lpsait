@@ -1741,6 +1741,51 @@ if (aboutPrev && aboutNext) {
   aboutNext.addEventListener("click", () => aboutGo(1));
 }
 
+// Поддержка свайпа пальцем на смартфонах для слайдера «О конкурсе / Результаты»
+if (aboutTrack) {
+  let touchStartX = 0;
+  let touchStartY = 0;
+  let touchDiffX = 0;
+  let touchDiffY = 0;
+
+  aboutTrack.addEventListener(
+    "touchstart",
+    (e) => {
+      if (e.touches && e.touches.length === 1) {
+        touchStartX = e.touches[0].clientX;
+        touchStartY = e.touches[0].clientY;
+        touchDiffX = 0;
+        touchDiffY = 0;
+      }
+    },
+    { passive: true }
+  );
+
+  aboutTrack.addEventListener(
+    "touchmove",
+    (e) => {
+      if (e.touches && e.touches.length === 1) {
+        touchDiffX = e.touches[0].clientX - touchStartX;
+        touchDiffY = e.touches[0].clientY - touchStartY;
+      }
+    },
+    { passive: true }
+  );
+
+  aboutTrack.addEventListener("touchend", () => {
+    // Если жест был горизонтальным свайпом (> 35px) и преобладает по оси X над вертикальным скроллом
+    if (Math.abs(touchDiffX) > 35 && Math.abs(touchDiffX) > Math.abs(touchDiffY) * 1.2) {
+      if (touchDiffX < 0) {
+        aboutGo(1);
+      } else {
+        aboutGo(-1);
+      }
+    }
+    touchDiffX = 0;
+    touchDiffY = 0;
+  });
+}
+
 // ---------- FAQ-аккордеон ----------
 document.querySelectorAll(".faq__item").forEach((item) => {
   const btn = item.querySelector(".faq__q");
