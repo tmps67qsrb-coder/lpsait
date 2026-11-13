@@ -11,7 +11,10 @@ try {
 }
 
 const VALID_IDS = new Set(["f1", "f2", "f3", "f4", "f5", "f6", "f7", "f8", "f9"]);
-const SECRET_KEY = process.env.VOTE_SECRET || crypto.randomBytes(32).toString("hex");
+const SECRET_KEY = process.env.VOTE_SECRET;
+if (!SECRET_KEY || Buffer.byteLength(SECRET_KEY, "utf8") < 32) {
+  throw new Error("VOTE_SECRET must be configured with at least 32 bytes");
+}
 const ENC_KEY = crypto.createHash("sha256").update(SECRET_KEY).digest();
 const PBKDF2_ITERATIONS = 100000;
 const MAX_BODY_BYTES = 4096;
@@ -178,6 +181,35 @@ function recordAttempt(key, windowMs = 300000) {
 
 function resetRateLimit(key) {
   FAILED_ATTEMPTS.delete(key);
+}
+
+// Durable login throttling shared by Netlify function instances. Keys are hashed
+// so phone numbers and IP addresses are not stored as readable blob names.
+const securityStore = getStore("proforg-security-2026-v1");
+
+async function readDurableAttempts(key, windowMs) {
+  const blobKey = `login-attempts:${crypto.createHash("sha256").update(key).digest("hex")}`;
+  const record = await securityStore.get(blobKey, { type: "json" });
+  const cutoff = Date.now() - windowMs;
+  const times = Array.isArray(record?.times) ? record.times.filter((t) => Number.isFinite(t) && t > cutoff) : [];
+  return { blobKey, times };
+}
+
+async function isDurablyRateLimited(key, maxAttempts = 5, windowMs = 300000) {
+  const { blobKey, times } = await readDurableAttempts(key, windowMs);
+  await securityStore.setJSON(blobKey, { times });
+  return times.length >= maxAttempts;
+}
+
+async function recordDurableAttempt(key, windowMs = 300000) {
+  const { blobKey, times } = await readDurableAttempts(key, windowMs);
+  times.push(Date.now());
+  await securityStore.setJSON(blobKey, { times });
+}
+
+async function resetDurableRateLimit(key) {
+  const blobKey = `login-attempts:${crypto.createHash("sha256").update(key).digest("hex")}`;
+  await securityStore.delete(blobKey);
 }
 
 function sanitizeText(str, maxLen = 140) {
@@ -773,7 +805,7 @@ export default async (req) => {
       const password = String(body.password || "").trim().slice(0, 128);
       const rlKey = getRateLimitKey(req, loginKey);
 
-      if (isRateLimited(rlKey, 5, 300000)) {
+      if (await isDurablyRateLimited(rlKey, 5, 300000)) {
         return jsonResponse(
           { ok: false, error: "Слишком много неудачных попыток входа. Попробуйте через 5 минут." },
           429
@@ -781,18 +813,18 @@ export default async (req) => {
       }
 
       if (!SAFE_LOGIN_RE.test(loginKey)) {
-        recordAttempt(rlKey);
+        await recordDurableAttempt(rlKey);
         return jsonResponse({ ok: false, error: "Неверный логин (номер телефона) или пароль" }, 401);
       }
 
       // Вход для 6 фиксированных аккаунтов администраторов
       if (Object.prototype.hasOwnProperty.call(ADMIN_ACCOUNTS, loginKey)) {
         if (!verifyPasswordHash(password, ADMIN_ACCOUNTS[loginKey])) {
-          recordAttempt(rlKey);
+          await recordDurableAttempt(rlKey);
           return jsonResponse({ ok: false, error: "Неверный логин администратора или пароль" }, 401);
         }
 
-        resetRateLimit(rlKey);
+        await resetDurableRateLimit(rlKey);
         const token = createToken(loginKey);
         const state = await getCachedState(store);
         const total = Object.values(state.counts).reduce((a, b) => a + b, 0);
@@ -827,14 +859,14 @@ export default async (req) => {
         verifyPasswordHash(password, userAccount.password_sha256);
 
       if (!valid) {
-        recordAttempt(rlKey);
+        await recordDurableAttempt(rlKey);
         return jsonResponse(
           { ok: false, error: "Неверный номер телефона или пароль" },
           401
         );
       }
 
-      resetRateLimit(rlKey);
+      await resetDurableRateLimit(rlKey);
       const canonicalLogin = userAccount.login;
       const token = createToken(canonicalLogin);
 
@@ -948,9 +980,6 @@ export default async (req) => {
     token = authHeader.slice(7).trim().slice(0, 256);
   }
   let rawLogin = (req.headers && (req.headers.get("x-user-login") || req.headers["x-user-login"]) || "").trim().slice(0, 64);
-  if (!token) {
-    token = (url.searchParams.get("token") || "").trim().slice(0, 256);
-  }
   if (!rawLogin) {
     rawLogin = (url.searchParams.get("login") || "").trim().slice(0, 64);
   }

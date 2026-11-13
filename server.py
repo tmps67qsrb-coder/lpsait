@@ -798,8 +798,6 @@ class ProforgHandler(SimpleHTTPRequestHandler):
             raw_login = (self.headers.get("X-User-Login", "") or "").strip()[:128]
 
             qs = urllib.parse.parse_qs(parsed.query)
-            if not token:
-                token = (qs.get("token", [""])[0] or "").strip()[:256]
             if not raw_login:
                 raw_login = (qs.get("login", [""])[0] or "").strip()[:128]
 
