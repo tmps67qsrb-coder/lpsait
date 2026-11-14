@@ -187,24 +187,24 @@ function resetRateLimit(key) {
 // so phone numbers and IP addresses are not stored as readable blob names.
 const securityStore = getStore("proforg-security-2026-v1");
 
-async function readDurableAttempts(key, windowMs) {
+async function claimLoginAttempt(key, maxAttempts = 5, windowMs = 300000) {
   const blobKey = `login-attempts:${crypto.createHash("sha256").update(key).digest("hex")}`;
-  const record = await securityStore.get(blobKey, { type: "json" });
-  const cutoff = Date.now() - windowMs;
-  const times = Array.isArray(record?.times) ? record.times.filter((t) => Number.isFinite(t) && t > cutoff) : [];
-  return { blobKey, times };
-}
-
-async function isDurablyRateLimited(key, maxAttempts = 5, windowMs = 300000) {
-  const { blobKey, times } = await readDurableAttempts(key, windowMs);
-  await securityStore.setJSON(blobKey, { times });
-  return times.length >= maxAttempts;
-}
-
-async function recordDurableAttempt(key, windowMs = 300000) {
-  const { blobKey, times } = await readDurableAttempts(key, windowMs);
-  times.push(Date.now());
-  await securityStore.setJSON(blobKey, { times });
+  for (let retry = 0; retry < 8; retry++) {
+    const current = await securityStore.getWithMetadata(blobKey, { type: "json", consistency: "strong" });
+    const now = Date.now();
+    const cutoff = now - windowMs;
+    const times = Array.isArray(current?.data?.times)
+      ? current.data.times.filter((t) => Number.isFinite(t) && t > cutoff)
+      : [];
+    if (times.length >= maxAttempts) return false;
+    times.push(now);
+    const result = await securityStore.setJSON(blobKey, { times }, current?.etag
+      ? { onlyIfMatch: current.etag }
+      : { onlyIfNew: true });
+    if (result.modified) return true;
+  }
+  // Fail closed if contention prevents a reliable rate-limit decision.
+  return false;
 }
 
 async function resetDurableRateLimit(key) {
@@ -805,7 +805,7 @@ export default async (req) => {
       const password = String(body.password || "").trim().slice(0, 128);
       const rlKey = getRateLimitKey(req, loginKey);
 
-      if (await isDurablyRateLimited(rlKey, 5, 300000)) {
+      if (!(await claimLoginAttempt(rlKey, 5, 300000))) {
         return jsonResponse(
           { ok: false, error: "Слишком много неудачных попыток входа. Попробуйте через 5 минут." },
           429
@@ -813,14 +813,12 @@ export default async (req) => {
       }
 
       if (!SAFE_LOGIN_RE.test(loginKey)) {
-        await recordDurableAttempt(rlKey);
         return jsonResponse({ ok: false, error: "Неверный логин (номер телефона) или пароль" }, 401);
       }
 
       // Вход для 6 фиксированных аккаунтов администраторов
       if (Object.prototype.hasOwnProperty.call(ADMIN_ACCOUNTS, loginKey)) {
         if (!verifyPasswordHash(password, ADMIN_ACCOUNTS[loginKey])) {
-          await recordDurableAttempt(rlKey);
           return jsonResponse({ ok: false, error: "Неверный логин администратора или пароль" }, 401);
         }
 
@@ -859,7 +857,6 @@ export default async (req) => {
         verifyPasswordHash(password, userAccount.password_sha256);
 
       if (!valid) {
-        await recordDurableAttempt(rlKey);
         return jsonResponse(
           { ok: false, error: "Неверный номер телефона или пароль" },
           401
