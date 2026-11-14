@@ -1156,7 +1156,7 @@
             <p class="cabinet-form__hint">Заполните поля для оформления электронного пропуска зрителя на финал в БЗДК.</p>
 
             <label class="vote-auth__field">
-              <span>Номер телефона (РФ, логин) *</span>
+              <span>Номер телефона *</span>
               <input type="tel" id="regPhoneInput" name="phone" placeholder="+7 (9XX) XXX-XX-XX" required autocomplete="tel" maxlength="18" inputmode="tel">
               <small class="field-hint" id="regPhoneHint">Только российские номера: +7 (9XX) XXX-XX-XX</small>
             </label>
@@ -1226,11 +1226,11 @@
 
           <!-- Форма входа -->
           <form class="cabinet-form reg-form" id="cabinetLoginForm" autocomplete="off" hidden novalidate>
-            <p class="cabinet-form__hint">Введите номер телефона, указанный при регистрации (или логин администратора), и пароль.</p>
+            <p class="cabinet-form__hint">Введите номер телефона, указанный при регистрации, и пароль.</p>
 
             <label class="vote-auth__field">
-              <span>Номер телефона или логин *</span>
-              <input type="text" id="loginPhoneInput" name="login" placeholder="+7 (9XX) XXX-XX-XX" required autocomplete="username">
+              <span>Номер телефона *</span>
+              <input type="text" id="loginPhoneInput" name="login" placeholder="+7 (9XX) XXX-XX-XX" required autocomplete="tel">
             </label>
 
             <div class="vote-auth__field">
@@ -1272,7 +1272,7 @@
               <b class="cabinet-profile__val" id="cabProfileName">—</b>
             </div>
             <div class="cabinet-profile__row">
-              <span class="cabinet-profile__label">Номер телефона (логин):</span>
+              <span class="cabinet-profile__label">Номер телефона:</span>
               <b class="cabinet-profile__val" id="cabProfilePhone">—</b>
             </div>
             <div class="cabinet-profile__row">
@@ -1498,6 +1498,6 @@
     </div>
   </div>
 
-  <script src="script.js?v=80"></script>
+  <script src="script.js?v=81"></script>
 </body>
 </html>

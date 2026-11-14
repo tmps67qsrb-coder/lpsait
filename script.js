@@ -1424,7 +1424,7 @@ if (cabinetLoginForm) {
     const password = (loginPassInput.value || "").trim();
 
     if (!loginKey || !password) {
-      showLoginError("Введите номер телефона (или логин администратора) и пароль");
+      showLoginError("Введите номер телефона и пароль");
       return;
     }
 
