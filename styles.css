@@ -2984,7 +2984,8 @@ b { color: var(--cream); font-weight: 600; }
   .results-table {
     width: 100%;
     font-size: 13px;
-    table-layout: auto;
+    min-width: 0;
+    table-layout: fixed;
   }
   .results-table td {
     padding: 7px 3px;
@@ -3006,12 +3007,13 @@ b { color: var(--cream); font-weight: 600; }
     line-height: 1.1;
   }
   .results-table__num {
-    width: 32px;
-    min-width: 30px;
+    width: 8%;
+    min-width: 0;
     padding: 7px 2px !important;
     font-size: 13.5px;
   }
   .results-table__name {
+    width: 36%;
     padding-left: 6px !important;
     padding-right: 4px !important;
     white-space: normal !important;
@@ -3047,8 +3049,9 @@ b { color: var(--cream); font-weight: 600; }
     font-size: 15.5px !important;
     font-weight: 700 !important;
     padding: 7px 2px !important;
-    width: 42px;
+    width: 14%;
   }
+  .results-table__stage-th { width: 10.5%; }
   .sponsors { padding: 24px 14px; gap: 14px; }
   .sponsors__row { gap: 12px; }
   .sponsors__plate { min-width: 124px; padding: 12px 18px; min-height: 60px; }
