@@ -669,7 +669,7 @@ export default async (req) => {
     const action = String(body.action || "vote").trim();
 
     // 1. РЕГИСТРАЦИЯ В ЛИЧНОМ КАБИНЕТЕ (ТОЛЬКО ДЛЯ УЧАСТНИКОВ/ЗРИТЕЛЕЙ, НЕ ДЛЯ АДМИНОВ)
-    if (action === "register") {
+    if (action === "register_start") {
       const regRlKey = `reg:${clientIp}`;
       if (isRateLimited(regRlKey, 120, 300000)) {
         return jsonResponse(
@@ -741,60 +741,76 @@ export default async (req) => {
         );
       }
 
+      if (!process.env.VK_COMMUNITY_SLUG) {
+        return jsonResponse({ ok: false, error: "Подтверждение через VK ещё не настроено." }, 503);
+      }
       recordAttempt(regRlKey);
-
-      const userId = await allocateUniqueUserId(store, phone);
-      const candidateId = SUPPORTER_TO_CANDIDATE[supporterOf] || "";
-
-      const storedRecord = {
-        login: phone,
+      const challenge = crypto.randomBytes(24).toString("base64url");
+      await store.setJSON(`vk_registration:${challenge}`, {
         phone,
-        userId,
-        candidateId,
         fullName: encryptField(fullName),
         group: encryptField(group),
         notBmstu,
         supporterOf: encryptField(supporterOf),
-        present: false,
-        verifiedBy: "",
         password_sha256: createPasswordHash(password),
         createdAt: Date.now(),
-      };
-
-      await store.setJSON(`user:${phone}`, storedRecord);
-      ADMIN_USERS_CACHE = { ts: 0, users: null };
-
-      const indexList = (await store.get("user_index", { type: "json" })) || [];
-      if (Array.isArray(indexList) && !indexList.includes(phone)) {
-        indexList.push(phone);
-        await store.setJSON("user_index", indexList);
-      }
-
-      const token = createToken(phone);
-      const state = await getCachedState(store);
-      const total = Object.values(state.counts).reduce((a, b) => a + b, 0);
-
+        verifiedAt: 0,
+        vkUserId: 0,
+      }, { onlyIfNew: true });
       return jsonResponse({
         ok: true,
-        login: phone,
-        is_admin: false,
-        token,
-        profile: {
-          userId,
-          candidateId,
-          phone,
-          fullName,
-          group,
-          notBmstu,
-          supporterOf,
-          present: false,
-          verifiedBy: "",
-        },
-        my_vote: candidateId || null,
-        counts: state.counts,
-        total,
-        cabinet_notice: "В личном кабинете скоро появятся лист рассадки и данные о входе в БЗДК",
+        challenge,
+        vk_url: `https://vk.me/${encodeURIComponent(process.env.VK_COMMUNITY_SLUG)}?ref=${encodeURIComponent(challenge)}`,
+        expires_in: 600,
       });
+    }
+
+    if (action === "register_status") {
+      const challenge = String(body.challenge || "");
+      if (!/^[A-Za-z0-9_-]{32}$/.test(challenge)) return jsonResponse({ ok: false, error: "Заявка не найдена." }, 400);
+      const pending = await store.get(`vk_registration:${challenge}`, { type: "json", consistency: "strong" });
+      if (!pending || Date.now() - pending.createdAt > 10 * 60 * 1000) return jsonResponse({ ok: false, error: "Срок подтверждения истёк. Начните регистрацию заново." }, 410);
+      if (!pending.verifiedAt || !pending.vkUserId) return jsonResponse({ ok: true, verified: false });
+
+      const lock = await store.set(`vk_registration_lock:${challenge}`, String(Date.now()), { onlyIfNew: true });
+      if (!lock.modified) return jsonResponse({ ok: false, error: "Регистрация уже обрабатывается. Обновите страницу через несколько секунд." }, 409);
+      try {
+        const existing = await store.get(`user:${pending.phone}`, { type: "json", consistency: "strong" });
+        if (existing) return jsonResponse({ ok: false, error: "Этот номер уже зарегистрирован. Перейдите во вкладку «Вход»." }, 409);
+        const userId = await allocateUniqueUserId(store, pending.phone);
+        const candidateId = SUPPORTER_TO_CANDIDATE[decryptField(pending.supporterOf)] || "";
+        const account = {
+          login: pending.phone, phone: pending.phone, userId, candidateId,
+          fullName: pending.fullName, group: pending.group,
+          notBmstu: pending.notBmstu, supporterOf: pending.supporterOf,
+          password_sha256: pending.password_sha256, present: false, verifiedBy: "", createdAt: pending.createdAt,
+        };
+        const saved = await store.setJSON(`user:${pending.phone}`, account, { onlyIfNew: true });
+        if (!saved.modified) return jsonResponse({ ok: false, error: "Этот номер уже зарегистрирован. Перейдите во вкладку «Вход»." }, 409);
+        const vkBinding = await store.set(`vk_user:${pending.vkUserId}`, pending.phone, { onlyIfNew: true });
+        if (!vkBinding.modified) {
+          await store.delete(`user:${pending.phone}`);
+          return jsonResponse({ ok: false, error: "Этот VK-аккаунт уже связан с другой регистрацией." }, 409);
+        }
+        const indexList = (await store.get("user_index", { type: "json" })) || [];
+        if (Array.isArray(indexList) && !indexList.includes(pending.phone)) {
+          indexList.push(pending.phone);
+          await store.setJSON("user_index", indexList);
+        }
+        await store.setJSON(`vk_registration:${challenge}`, { ...pending, completed: true });
+        ADMIN_USERS_CACHE = { ts: 0, users: null };
+        const token = createToken(pending.phone);
+        const state = await getCachedState(store);
+        return jsonResponse({
+          ok: true, verified: true, login: pending.phone, is_admin: false, token,
+          profile: { userId, candidateId, phone: pending.phone, fullName: decryptField(pending.fullName), group: decryptField(pending.group), notBmstu: pending.notBmstu, supporterOf: decryptField(pending.supporterOf), present: false, verifiedBy: "" },
+          my_vote: candidateId || null, counts: state.counts,
+          total: Object.values(state.counts).reduce((a, b) => a + b, 0),
+          cabinet_notice: "В личном кабинете скоро появятся лист рассадки и данные о входе в БЗДК",
+        });
+      } finally {
+        await store.delete(`vk_registration_lock:${challenge}`);
+      }
     }
 
     // 2. ВХОД В ЛИЧНЫЙ КАБИНЕТ (ЗРИТЕЛЬ ИЛИ АДМИНИСТРАТОР)

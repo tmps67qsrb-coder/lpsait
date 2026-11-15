@@ -199,6 +199,9 @@ const regSupporterSelect = document.getElementById("regSupporterSelect");
 const regPassInput = document.getElementById("regPassInput");
 const regPassToggle = document.getElementById("regPassToggle");
 const regErrorMsg = document.getElementById("regErrorMsg");
+const vkRegistrationPending = document.getElementById("vkRegistrationPending");
+const vkRegistrationLink = document.getElementById("vkRegistrationLink");
+const vkRegistrationStatus = document.getElementById("vkRegistrationStatus");
 const pwdRuleLen = document.getElementById("pwdRuleLen");
 const pwdRuleEng = document.getElementById("pwdRuleEng");
 const pwdRuleSpec = document.getElementById("pwdRuleSpec");
@@ -1321,7 +1324,7 @@ if (cabinetRegForm) {
     }
 
     const payload = {
-      action: "register",
+      action: "register_start",
       phone,
       fullName,
       group: groupVal,
@@ -1341,6 +1344,43 @@ if (cabinetRegForm) {
         const data = await res.json().catch(() => null);
         if (!res.ok || !data || !data.ok) {
           showRegError((data && data.error) || "Ошибка при регистрации. Проверьте введённые данные.");
+          return;
+        }
+        if (vkRegistrationPending && data.challenge && data.vk_url) {
+          showRegError("");
+          vkRegistrationLink.href = data.vk_url;
+          vkRegistrationPending.hidden = false;
+          regSubmitBtn.disabled = true;
+          const deadline = Date.now() + 10 * 60 * 1000;
+          while (Date.now() < deadline) {
+            await new Promise((resolve) => setTimeout(resolve, 2500));
+            const statusRes = await fetch("/api/votes", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              credentials: "same-origin",
+              body: JSON.stringify({ action: "register_status", challenge: data.challenge }),
+            });
+            const status = await statusRes.json().catch(() => null);
+            if (status && status.ok && status.verified) {
+              currentUser = { login: status.login || phone, is_admin: false, token: status.token, profile: status.profile };
+              writeJSON(LS_AUTH, currentUser);
+              regPassInput.value = "";
+              vkRegistrationStatus.textContent = "Аккаунт подтверждён.";
+              vkRegistrationPending.hidden = true;
+              regSubmitBtn.disabled = false;
+              applyServerState(status);
+              updateAuthUI();
+              renderVoteCards();
+              return;
+            }
+            if (statusRes.status >= 400) {
+              vkRegistrationStatus.textContent = (status && status.error) || "Не удалось проверить статус заявки.";
+              regSubmitBtn.disabled = false;
+              return;
+            }
+          }
+          vkRegistrationStatus.textContent = "Ссылка истекла. Заполните форму и запросите новую.";
+          regSubmitBtn.disabled = false;
           return;
         }
         currentUser = {

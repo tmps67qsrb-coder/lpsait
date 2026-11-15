@@ -10,7 +10,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&family=Viaoda+Libre&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css?v=82">
+  <link rel="stylesheet" href="styles.css?v=83">
   <style>
     /* На компьютерах дублирующая подпись группы скрыта, видна только синяя колонка */
     .results-table__group-sub { display: none !important; }
@@ -1210,6 +1210,11 @@
             </div>
 
             <p class="vote-auth__error" id="regErrorMsg" hidden></p>
+            <div class="vk-registration-pending" id="vkRegistrationPending" hidden>
+              <p>Заявка сохранена. Откройте сообщения сообщества ВКонтакте и нажмите «Начать». После этого регистрация подтвердится автоматически.</p>
+              <a class="btn btn--primary" id="vkRegistrationLink" href="#" target="_blank" rel="noopener">Открыть бота ВКонтакте</a>
+              <p id="vkRegistrationStatus" aria-live="polite">Ожидаем подтверждения…</p>
+            </div>
 
             <p class="cabinet-consent-note">
               Нажимая «Зарегистрироваться», вы подтверждаете согласие на обработку персональных данных и использование файлов cookie.
@@ -1498,6 +1503,6 @@
     </div>
   </div>
 
-  <script src="script.js?v=81"></script>
+  <script src="script.js?v=82"></script>
 </body>
 </html>
