@@ -3742,7 +3742,7 @@ b { color: var(--cream); font-weight: 600; }
   margin-bottom: 2px;
 }
 
-.vk-registration-pending {
+.telegram-registration-pending {
   margin: 16px 0;
   padding: 16px;
   border: 1px solid rgba(140, 224, 255, 0.38);
@@ -3751,9 +3751,9 @@ b { color: var(--cream); font-weight: 600; }
   color: var(--cream);
   text-align: center;
 }
-.vk-registration-pending p { margin: 0 0 12px; }
-.vk-registration-pending [hidden] { display: none !important; }
-.vk-registration-pending a { display: inline-flex; margin: 4px auto 12px; }
+.telegram-registration-pending p { margin: 0 0 12px; }
+.telegram-registration-pending [hidden] { display: none !important; }
+.telegram-registration-pending a { display: inline-flex; margin: 4px auto 12px; }
 
 .vote-auth__field select {
   width: 100%;

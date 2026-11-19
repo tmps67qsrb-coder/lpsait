@@ -741,12 +741,17 @@ export default async (req) => {
         );
       }
 
-      if (!process.env.VK_COMMUNITY_SLUG) {
-        return jsonResponse({ ok: false, error: "Подтверждение через VK ещё не настроено." }, 503);
+      const telegramBotUsername = String(process.env.TELEGRAM_BOT_USERNAME || "").replace(/^@/, "");
+      if (
+        !/^[A-Za-z0-9_]{5,32}$/.test(telegramBotUsername) ||
+        !process.env.TELEGRAM_BOT_TOKEN ||
+        !/^[A-Za-z0-9_-]{32,128}$/.test(String(process.env.TELEGRAM_WEBHOOK_SECRET || ""))
+      ) {
+        return jsonResponse({ ok: false, error: "Подтверждение через Telegram ещё не настроено." }, 503);
       }
       recordAttempt(regRlKey);
       const challenge = crypto.randomBytes(24).toString("base64url");
-      await store.setJSON(`vk_registration:${challenge}`, {
+      await store.setJSON(`telegram_registration:${challenge}`, {
         phone,
         fullName: encryptField(fullName),
         group: encryptField(group),
@@ -755,12 +760,12 @@ export default async (req) => {
         password_sha256: createPasswordHash(password),
         createdAt: Date.now(),
         verifiedAt: 0,
-        vkUserId: 0,
+        telegramUserId: 0,
       }, { onlyIfNew: true });
       return jsonResponse({
         ok: true,
         challenge,
-        vk_url: `https://vk.me/${encodeURIComponent(process.env.VK_COMMUNITY_SLUG)}?ref=${encodeURIComponent(challenge)}`,
+        telegram_url: `https://t.me/${telegramBotUsername}?start=${encodeURIComponent(challenge)}`,
         expires_in: 600,
       });
     }
@@ -768,11 +773,11 @@ export default async (req) => {
     if (action === "register_status") {
       const challenge = String(body.challenge || "");
       if (!/^[A-Za-z0-9_-]{32}$/.test(challenge)) return jsonResponse({ ok: false, error: "Заявка не найдена." }, 400);
-      const pending = await store.get(`vk_registration:${challenge}`, { type: "json", consistency: "strong" });
+      const pending = await store.get(`telegram_registration:${challenge}`, { type: "json", consistency: "strong" });
       if (!pending || Date.now() - pending.createdAt > 10 * 60 * 1000) return jsonResponse({ ok: false, error: "Срок подтверждения истёк. Начните регистрацию заново." }, 410);
-      if (!pending.verifiedAt || !pending.vkUserId) return jsonResponse({ ok: true, verified: false });
+      if (!pending.verifiedAt || !pending.telegramUserId) return jsonResponse({ ok: true, verified: false });
 
-      const lock = await store.set(`vk_registration_lock:${challenge}`, String(Date.now()), { onlyIfNew: true });
+      const lock = await store.set(`telegram_registration_lock:${challenge}`, String(Date.now()), { onlyIfNew: true });
       if (!lock.modified) return jsonResponse({ ok: false, error: "Регистрация уже обрабатывается. Обновите страницу через несколько секунд." }, 409);
       try {
         const existing = await store.get(`user:${pending.phone}`, { type: "json", consistency: "strong" });
@@ -787,17 +792,17 @@ export default async (req) => {
         };
         const saved = await store.setJSON(`user:${pending.phone}`, account, { onlyIfNew: true });
         if (!saved.modified) return jsonResponse({ ok: false, error: "Этот номер уже зарегистрирован. Перейдите во вкладку «Вход»." }, 409);
-        const vkBinding = await store.set(`vk_user:${pending.vkUserId}`, pending.phone, { onlyIfNew: true });
-        if (!vkBinding.modified) {
+        const telegramBinding = await store.set(`telegram_user:${pending.telegramUserId}`, pending.phone, { onlyIfNew: true });
+        if (!telegramBinding.modified) {
           await store.delete(`user:${pending.phone}`);
-          return jsonResponse({ ok: false, error: "Этот VK-аккаунт уже связан с другой регистрацией." }, 409);
+          return jsonResponse({ ok: false, error: "Этот Telegram-аккаунт уже связан с другой регистрацией." }, 409);
         }
         const indexList = (await store.get("user_index", { type: "json" })) || [];
         if (Array.isArray(indexList) && !indexList.includes(pending.phone)) {
           indexList.push(pending.phone);
           await store.setJSON("user_index", indexList);
         }
-        await store.setJSON(`vk_registration:${challenge}`, { ...pending, completed: true });
+        await store.setJSON(`telegram_registration:${challenge}`, { ...pending, completed: true });
         ADMIN_USERS_CACHE = { ts: 0, users: null };
         const token = createToken(pending.phone);
         const state = await getCachedState(store);
@@ -809,7 +814,7 @@ export default async (req) => {
           cabinet_notice: "В личном кабинете скоро появятся лист рассадки и данные о входе в БЗДК",
         });
       } finally {
-        await store.delete(`vk_registration_lock:${challenge}`);
+        await store.delete(`telegram_registration_lock:${challenge}`);
       }
     }
 
