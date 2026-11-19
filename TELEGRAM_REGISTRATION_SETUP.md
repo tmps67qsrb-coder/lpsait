@@ -4,7 +4,7 @@
 
 Для работы нужны сам Telegram-бот и уже используемый Netlify. Отдельный сервер или сервис не требуется.
 
-Адрес сайта в Netlify: **https://lpsait.netlify.app**. Сейчас сайт отключён в Netlify, поэтому сначала включите его снова: откройте приложение `lpsait` → **Manage** → раздел **Disable, move, or delete** → **Enable**. Пока сайт отключён, страница регистрации и webhook недоступны.
+Адрес сайта: **https://thebestproforg.netlify.app**. Для доставки событий Telegram сайт должен быть доступен из интернета без входа в Netlify. Если webhook отвечает HTTP 401, откройте Manage и найдите «Project visibility». Для работы бота требуется значение Public.
 
 ## 1. Создайте бота
 
@@ -14,22 +14,22 @@
 
 ## 2. Добавьте переменные проекта Netlify
 
-В Netlify откройте **Apps → lpsait → Manage → Keys and secrets**. Это настройки приложения, не командные настройки. Если вы видите **Team settings → Environment variables** и надпись о платном плане, вернитесь к приложению: общие переменные команды на бесплатном плане недоступны и здесь не нужны.
+Откройте Manage и найдите «Environment variables».
 
 В настройках приложения добавьте переменные для **Production**, включив использование в **Functions**:
 
 - `TELEGRAM_BOT_USERNAME` — username бота без `@`.
 - `TELEGRAM_BOT_TOKEN` — новый токен от BotFather; отметьте как секрет. Если старый токен уже отправляли в переписку, сначала отзовите его через `@BotFather` и используйте новый.
 - `TELEGRAM_WEBHOOK_SECRET` — отдельный случайный секрет из латинских букв, цифр, `_` и `-`, длиной 32–128 символов; отметьте как секрет. Его можно создать командой `openssl rand -hex 32`.
-- `VOTE_SECRET` — оставьте существующее значение без изменений.
+- `VOTE_SECRET` — ключ шифрования данных и подписи сессий, не менее 32 байт. Если пользователи уже регистрировались, восстановите прежнее значение. Для нового сайта без сохранённых данных создайте криптографически случайный ключ.
 
-Не меняйте `VOTE_SECRET`: добавьте только Telegram-переменные и сохраните уже существующее значение `VOTE_SECRET`.
+Не заменяйте существующий `VOTE_SECRET`: смена ключа делает ранее зашифрованные данные недоступными и завершает действующие сессии.
 
 После сохранения переменных запустите новый production deploy и дождитесь успешного завершения.
 
 ## 3. Установите webhook Telegram
 
-Webhook URL: **https://lpsait.netlify.app/api/telegram-webhook**.
+Webhook URL: **https://thebestproforg.netlify.app/api/telegram-webhook**.
 
 После включения сайта и успешного production deploy выполните команду ниже в Терминале на своём компьютере. Она запросит токен и секрет скрытым вводом; не вставляйте их в переписку:
 
@@ -39,7 +39,7 @@ printf '\n'
 read -s "TELEGRAM_WEBHOOK_SECRET?Секрет webhook: "
 printf '\n'
 curl --silent --show-error --fail-with-body --request POST \
-  --data-urlencode "url=https://lpsait.netlify.app/api/telegram-webhook" \
+  --data-urlencode "url=https://thebestproforg.netlify.app/api/telegram-webhook" \
   --data-urlencode "secret_token=${TELEGRAM_WEBHOOK_SECRET}" \
   --data-urlencode 'allowed_updates=["message"]' \
   "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/setWebhook"
@@ -50,7 +50,7 @@ unset TELEGRAM_BOT_TOKEN TELEGRAM_WEBHOOK_SECRET
 
 ## 4. Проверьте регистрацию
 
-1. Откройте **https://lpsait.netlify.app** и начните регистрацию с отдельным тестовым номером.
+1. Откройте **https://thebestproforg.netlify.app** и начните регистрацию с отдельным тестовым номером.
 2. Нажмите **Открыть Telegram-бот**, затем **Начать**.
 3. Бот подтвердит приём, а сайт автоматически завершит регистрацию.
 
