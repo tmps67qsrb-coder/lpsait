@@ -1102,7 +1102,7 @@
             <span>Как подать заявку?</span>
             <svg class="faq__star" aria-hidden="true"><use href="#spark"/></svg>
           </button>
-          <div class="faq__a"><p>Заполнить форму регистрации в официальной группе конкурса «ВКонтакте» (vk.com/thebestprof) с 8 по 18 сентября: ФИО, факультет и учебная группа, контактные данные, согласие на обработку персональных данных.</p></div>
+          <div class="faq__a"><p>Заполнить регистрационную форму на сайте, затем открыть Telegram-бот конкурса по персональной ссылке и нажать «Начать». Регистрация завершится автоматически после подтверждения в боте.</p></div>
         </div>
         <div class="faq__item reveal">
           <button class="faq__q" aria-expanded="false">
@@ -1210,10 +1210,10 @@
             </div>
 
             <p class="vote-auth__error" id="regErrorMsg" hidden></p>
-            <div class="vk-registration-pending" id="vkRegistrationPending" hidden>
-              <p>Заявка сохранена. Откройте сообщения сообщества ВКонтакте и нажмите «Начать». После этого регистрация подтвердится автоматически.</p>
-              <a class="btn btn--primary" id="vkRegistrationLink" href="#" target="_blank" rel="noopener">Открыть бота ВКонтакте</a>
-              <p id="vkRegistrationStatus" aria-live="polite">Ожидаем подтверждения…</p>
+            <div class="telegram-registration-pending" id="telegramRegistrationPending" hidden>
+              <p>Заявка сохранена. Перейдите в Telegram-бот и нажмите «Начать». После этого регистрация подтвердится автоматически.</p>
+              <a class="btn btn--primary" id="telegramRegistrationLink" href="#" target="_blank" rel="noopener">Открыть Telegram-бот</a>
+              <p id="telegramRegistrationStatus" aria-live="polite">Ожидаем подтверждения…</p>
             </div>
 
             <p class="cabinet-consent-note">

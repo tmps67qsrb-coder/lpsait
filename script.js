@@ -199,9 +199,9 @@ const regSupporterSelect = document.getElementById("regSupporterSelect");
 const regPassInput = document.getElementById("regPassInput");
 const regPassToggle = document.getElementById("regPassToggle");
 const regErrorMsg = document.getElementById("regErrorMsg");
-const vkRegistrationPending = document.getElementById("vkRegistrationPending");
-const vkRegistrationLink = document.getElementById("vkRegistrationLink");
-const vkRegistrationStatus = document.getElementById("vkRegistrationStatus");
+const telegramRegistrationPending = document.getElementById("telegramRegistrationPending");
+const telegramRegistrationLink = document.getElementById("telegramRegistrationLink");
+const telegramRegistrationStatus = document.getElementById("telegramRegistrationStatus");
 const pwdRuleLen = document.getElementById("pwdRuleLen");
 const pwdRuleEng = document.getElementById("pwdRuleEng");
 const pwdRuleSpec = document.getElementById("pwdRuleSpec");
@@ -1346,10 +1346,10 @@ if (cabinetRegForm) {
           showRegError((data && data.error) || "Ошибка при регистрации. Проверьте введённые данные.");
           return;
         }
-        if (vkRegistrationPending && data.challenge && data.vk_url) {
+        if (telegramRegistrationPending && data.challenge && data.telegram_url) {
           showRegError("");
-          vkRegistrationLink.href = data.vk_url;
-          vkRegistrationPending.hidden = false;
+          telegramRegistrationLink.href = data.telegram_url;
+          telegramRegistrationPending.hidden = false;
           regSubmitBtn.disabled = true;
           const deadline = Date.now() + 10 * 60 * 1000;
           while (Date.now() < deadline) {
@@ -1365,8 +1365,8 @@ if (cabinetRegForm) {
               currentUser = { login: status.login || phone, is_admin: false, token: status.token, profile: status.profile };
               writeJSON(LS_AUTH, currentUser);
               regPassInput.value = "";
-              vkRegistrationStatus.textContent = "Аккаунт подтверждён.";
-              vkRegistrationPending.hidden = true;
+              telegramRegistrationStatus.textContent = "Аккаунт подтверждён.";
+              telegramRegistrationPending.hidden = true;
               regSubmitBtn.disabled = false;
               applyServerState(status);
               updateAuthUI();
@@ -1374,12 +1374,12 @@ if (cabinetRegForm) {
               return;
             }
             if (statusRes.status >= 400) {
-              vkRegistrationStatus.textContent = (status && status.error) || "Не удалось проверить статус заявки.";
+              telegramRegistrationStatus.textContent = (status && status.error) || "Не удалось проверить статус заявки.";
               regSubmitBtn.disabled = false;
               return;
             }
           }
-          vkRegistrationStatus.textContent = "Ссылка истекла. Заполните форму и запросите новую.";
+          telegramRegistrationStatus.textContent = "Ссылка истекла. Заполните форму и запросите новую.";
           regSubmitBtn.disabled = false;
           return;
         }
@@ -2091,5 +2091,4 @@ document.querySelectorAll(".faq__item").forEach((item) => {
   });
 })();
 
-// Регистрация участников проходит в официальной группе конкурса ВКонтакте:
-// https://vk.com/thebestprof (анкета: ФИО, факультет и группа, контакты, согласие на обработку ПД).
+// Регистрация аккаунта подтверждается в Telegram-боте конкурса по одноразовой ссылке.
