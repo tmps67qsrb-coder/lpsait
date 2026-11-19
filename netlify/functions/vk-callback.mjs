@@ -13,8 +13,12 @@ export default async (req) => {
 
   let event;
   try { event = await req.json(); } catch { return json({ ok: false }, 400); }
+  // VK's initial confirmation request contains type/group_id, but no secret.
+  if (event.type === "confirmation") {
+    if (process.env.VK_COMMUNITY_ID && String(event.group_id) !== process.env.VK_COMMUNITY_ID) return json({ ok: false }, 403);
+    return new Response(confirmation, { headers: { "Content-Type": "text/plain" } });
+  }
   if (event.secret !== expectedSecret) return json({ ok: false }, 403);
-  if (event.type === "confirmation") return new Response(confirmation, { headers: { "Content-Type": "text/plain" } });
   if (event.type === "message_new") {
     const message = event.object?.message || event.object;
     const challenge = String(message?.ref || "");

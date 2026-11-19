@@ -16,6 +16,7 @@
 Задайте для production/deploy preview:
 
 - `VK_COMMUNITY_SLUG` — короткий адрес сообщества без `vk.me/`.
+- `VK_COMMUNITY_ID` — числовой ID сообщества (для указанного сообщества `241031950`).
 - `VK_CALLBACK_SECRET` — секрет Callback API, заданный в настройках VK.
 - `VK_CONFIRMATION_TOKEN` — строка подтверждения из настроек Callback API.
 - `VOTE_SECRET` — постоянный секрет проекта длиной не менее 32 байт.
