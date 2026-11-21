@@ -5,14 +5,36 @@ const pad = (n) => String(n).padStart(2, "0");
 // ---------- Шапка: тень при скролле + прогресс-бар чтения ----------
 const header = document.getElementById("header");
 const progressBar = document.querySelector(".progress");
+// Небольшое «плавание» крупных визуальных блоков вслед за прокруткой.
+// Двигаем их через CSS translate, чтобы не конфликтовать с reveal-transform.
+const flowMotionTargets = [
+  ...document.querySelectorAll(".hero__name-wrap, .hero__alley, .about-slider, .countdown, .score, .jury__photo, .sponsors__plate"),
+].map((element) => ({
+  element,
+  strength: element.matches(".hero__name-wrap") ? 8 : element.matches(".hero__alley, .about-slider") ? 14 : 7,
+}));
+const reduceMotionQuery = window.matchMedia("(prefers-reduced-motion: reduce)");
+function updateFlowMotion() {
+  if (reduceMotionQuery.matches) return;
+  const viewportCenter = window.innerHeight * 0.52;
+  flowMotionTargets.forEach(({ element, strength }) => {
+    const rect = element.getBoundingClientRect();
+    const distance = (viewportCenter - (rect.top + rect.height / 2)) / Math.max(window.innerHeight, 1);
+    const boundedDistance = Math.max(-1, Math.min(1, distance));
+    element.style.setProperty("--flow-y", `${(boundedDistance * strength).toFixed(1)}px`);
+  });
+}
+
 const onScroll = () => {
   header.classList.toggle("scrolled", window.scrollY > 10);
   if (progressBar) {
     const max = document.documentElement.scrollHeight - window.innerHeight;
     progressBar.style.width = (max > 0 ? (window.scrollY / max) * 100 : 0) + "%";
   }
+  updateFlowMotion();
 };
 window.addEventListener("scroll", onScroll, { passive: true });
+window.addEventListener("resize", onScroll, { passive: true });
 onScroll();
 
 // ---------- Мобильное меню ----------

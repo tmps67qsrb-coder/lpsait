@@ -4829,3 +4829,40 @@ b { color: var(--cream); font-weight: 600; }
     text-align: center;
   }
 }
+
+/* Flowing motion layer from the reference, without replacing the site's identity. */
+.hero__name-wrap,
+.hero__alley,
+.about-slider,
+.countdown,
+.score,
+.jury__photo,
+.sponsors__plate {
+  translate: 0 var(--flow-y, 0px);
+  transition: translate 180ms linear;
+  will-change: translate;
+}
+.hero__alley { transform-origin: 50% 45%; }
+.alley-card { transition: transform .55s cubic-bezier(.2,.75,.25,1), box-shadow .55s ease, border-color .55s ease; }
+.alley-card__photo img { transform: scale(1.015); transition: transform .8s cubic-bezier(.2,.75,.25,1), filter .8s ease; }
+.alley-card:hover .alley-card__photo img { transform: scale(1.07); }
+.about-slider__track { transition: transform .85s cubic-bezier(.22,1,.36,1); }
+.about-slider__arrow, .slider-btn { transition: transform .35s ease, background .35s ease, box-shadow .35s ease; }
+.about-slider__arrow:hover, .slider-btn:hover { transform: translateY(-3px); }
+.stage, .faq__item, .reg-card { transition: transform .45s cubic-bezier(.2,.75,.25,1), border-color .45s ease, box-shadow .45s ease; }
+.stage:hover, .faq__item:hover { transform: translateY(-3px); }
+
+@media (prefers-reduced-motion: reduce) {
+  .hero__name-wrap,
+  .hero__alley,
+  .about-slider,
+  .countdown,
+  .score,
+  .jury__photo,
+  .sponsors__plate {
+    translate: none !important;
+    will-change: auto;
+  }
+  .alley-card__photo img { transform: none; }
+  .alley-card:hover .alley-card__photo img { transform: none; }
+}
